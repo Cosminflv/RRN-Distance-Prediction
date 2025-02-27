@@ -1,0 +1,45 @@
+import pandas as pd
+import xml.etree.ElementTree as ET
+
+class GPXParser:
+    def __init__(self, gpx_files):
+        """Accepts a list of GPX files to parse."""
+        self.gpx_files = gpx_files if isinstance(gpx_files, list) else [gpx_files]
+        self.data = None
+
+    def parse_gpx(self):
+        """Parses the GPX files and extracts latitude, longitude, elevation, and time."""
+        namespace = {'gpx': 'http://www.topografix.com/GPX/1/1'}  # Define namespace
+        trackpoints = []
+        
+        for gpx_file in self.gpx_files:
+            tree = ET.parse(gpx_file)
+            root = tree.getroot()
+            
+            for trkpt in root.findall(".//gpx:trkpt", namespace):
+                lat = float(trkpt.get("lat"))
+                lon = float(trkpt.get("lon"))
+                ele = trkpt.find("gpx:ele", namespace)
+                time = trkpt.find("gpx:time", namespace)
+                
+                trackpoints.append({
+                    "latitude": lat,
+                    "longitude": lon,
+                    "elevation": float(ele.text) if ele is not None else None,
+                    "time": time.text if time is not None else None,
+                    "source_file": gpx_file
+                })
+        
+        self.data = pd.DataFrame(trackpoints)
+        return self.data
+    
+    def get_dataframe(self):
+        """Returns the parsed GPX data as a DataFrame."""
+        if self.data is None:
+            return self.parse_gpx()
+        return self.data
+
+# Example usage:
+# parser = GPXParser(["path_to_gpx_file1.gpx", "path_to_gpx_file2.gpx"])
+# df = parser.get_dataframe()
+# print(df.head())
