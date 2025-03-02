@@ -1,7 +1,7 @@
 from sklearn.model_selection import train_test_split
 
 
-def split_data_by_track(processed_df, test_size=0.2, val_size=0.25, random_state=42):
+def split_data_by_track(processed_df, test_size=0.2, val_size=0.1, random_state=42):
     """Split data into train/val/test sets while keeping tracks intact"""
     # Get unique tracks
     tracks = processed_df['source_file'].unique()

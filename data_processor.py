@@ -44,8 +44,10 @@ class GPXDataProcessor:
             # Create sequences for this track
             if len(coords) >= sequence_length:
                 for i in range(sequence_length, len(coords)):
-                    X.append(coords[i-sequence_length:i])  # Historical sequence
-                    y.append(coords[i])                   # Next point
+                    if i + 30 < len(coords):
+                        X.append(coords[i-sequence_length:i])  # Historical sequence
+
+                        y.append(coords[i + 30])                   # Next point
                 
         return np.array(X), np.array(y)
 
@@ -71,6 +73,11 @@ class GPXDataProcessor:
         scaled_coords = self.scaler.fit_transform(self.df[["latitude", "longitude"]])
         self.df["latitude_norm"] = scaled_coords[:, 0]
         self.df["longitude_norm"] = scaled_coords[:, 1]
+        reset_coords = self.scaler.inverse_transform(scaled_coords)
+        latitudes = reset_coords[:, 0]
+        longitudes = reset_coords[:, 1]
+        x=3
+
 
 
 # Example usage:
