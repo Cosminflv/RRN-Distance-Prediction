@@ -65,7 +65,7 @@ def main():
     print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
 
     # ------------------------- Model Training -------------------------
-    tracker = RNNTracker(input_shape=(15, 2))  # Assuming (sequence_length=15, features=2)
+    tracker = RNNTracker(input_shape=(15, 3))  # Assuming (sequence_length=15, features=3)
     tracker.compile(loss='mse', metrics=['accuracy'])
     tracker.summary()
 
