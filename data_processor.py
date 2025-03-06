@@ -31,7 +31,7 @@ class GPXDataProcessor:
         for track_id, track in processed_df.groupby('source_file'):
             # Include elevation in features, targets are still coordinates
             features = track[['latitude_norm', 'longitude_norm', 'elevation_norm', 'time_seconds_norm']].values
-            targets = track[['latitude_norm', 'longitude_norm']].values
+            targets = track[['latitude_norm', 'longitude_norm', 'time_seconds_norm']].values
             
             if len(features) >= sequence_length:
                 for i in range(sequence_length, len(features)):

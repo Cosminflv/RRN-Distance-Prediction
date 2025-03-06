@@ -1,4 +1,4 @@
-from keras.models import Sequential, Model
+from keras.models import Model
 from keras.layers import LSTM, Dense, Input
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -6,7 +6,7 @@ import numpy as np
 from statsmodels.graphics.tsaplots import plot_acf  # Requires statsmodels
 
 class RNNTracker:
-    def __init__(self, input_shape, lstm_units=128, activation='relu', scaler=None):
+    def __init__(self, input_shape, lstm_units=128, activation='relu'):
         """
         RNN-based position prediction model
         
@@ -25,7 +25,7 @@ class RNNTracker:
         """Construct the LSTM architecture"""
         inputs = Input(shape=self.input_shape)  # Define input layer
         x = LSTM(self.lstm_units, activation=self.activation, return_sequences=False)(inputs)
-        outputs = Dense(2)(x)  # Predicts (lat_norm, lon_norm, seconds_since_start_norm)
+        outputs = Dense(3)(x)  # Predicts (lat_norm, lon_norm, seconds_since_start_norm)
 
         model = Model(inputs=inputs, outputs=outputs)  # Functional API model
         return model
@@ -88,7 +88,7 @@ class RNNTracker:
         plt.legend()
         plt.show()
 
-    def plot_actual_vs_predicted(self, X, y_true, figsize=(10, 6), sample_points=200):
+    def plot_actual_vs_predicted_coords(self, X, y_true, figsize=(10, 6), sample_points=200):
         """Scatter plot of true vs predicted coordinates (in original WGS84 scale)"""
 
         # Predict normalized values
@@ -105,6 +105,23 @@ class RNNTracker:
         plt.ylabel('Longitude')
         plt.title('Actual vs Predicted Positions (Denormalized)')
         plt.legend()
+        plt.show()
+
+    def plot_time_scatter(self, X, y_true, figsize=(10, 6)):
+        """Scatter plot of actual vs predicted time values"""
+        y_pred = self.predict(X)
+
+        actual_time = y_true[:, 2]
+        predicted_time = y_pred[:, 2]
+
+        plt.figure(figsize=figsize)
+        plt.scatter(actual_time, predicted_time, alpha=0.5)
+        plt.plot([min(actual_time), max(actual_time)], 
+                 [min(actual_time), max(actual_time)], 'k--')
+        plt.xlabel('Actual Normalized Time')
+        plt.ylabel('Predicted Normalized Time')
+        plt.title('Time Prediction Correlation')
+        plt.grid(True)
         plt.show()
 
     def plot_error_distributions(self, X, y_true, figsize=(12, 5)):

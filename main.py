@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import pandas as pd
 from sklearn.discriminant_analysis import StandardScaler
 from data_processor import GPXDataProcessor
 from gpx_data_parser import GPXParser
@@ -75,7 +74,7 @@ def main():
     tracker.compile(loss='mse', metrics=['mae'])
     tracker.summary()
 
-    history = tracker.train(X_train, y_train, epochs=5, validation_data=(X_val, y_val))
+    history = tracker.train(X_train, y_train, epochs=10, validation_data=(X_val, y_val))
     loss, accuracy = tracker.evaluate(X_test, y_test, batch_size=64)
 
     print(f"Test loss: {loss}, Test accuracy: {accuracy}")
@@ -84,7 +83,8 @@ def main():
     tracker.history = history
     tracker.plot_training_curves(metric='loss')
     tracker.plot_training_curves(metric='mae')
-    tracker.plot_actual_vs_predicted(X_test, y_test, sample_points=200)
+    tracker.plot_actual_vs_predicted_coords(X_test, y_test, sample_points=200)
+    tracker.plot_time_scatter(X_test, y_test)
     tracker.plot_error_distributions(X_test, y_test)
     tracker.plot_residual_autocorrelation(X_test, y_test)
     tracker.visualize_model_architecture()
