@@ -65,11 +65,11 @@ def main():
     print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
 
     # ------------------------- Model Training -------------------------
-    tracker = RNNTracker(input_shape=(15, 3))  # Assuming (sequence_length=15, features=3)
+    tracker = RNNTracker(input_shape=(15, 4))  # Assuming (sequence_length=15, features=4)
     tracker.compile(loss='mse', metrics=['accuracy'])
     tracker.summary()
 
-    history = tracker.train(X_train, y_train, epochs=10, validation_data=(X_val, y_val))
+    history = tracker.train(X_train, y_train, epochs=30, validation_data=(X_val, y_val))
     loss, accuracy = tracker.evaluate(X_test, y_test, batch_size=64)
 
     print(f"Test loss: {loss}, Test accuracy: {accuracy}")

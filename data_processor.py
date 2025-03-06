@@ -14,8 +14,8 @@ class GPXDataProcessor:
         """Process data: handle missing elevation, normalize features, and calculate time features."""
         self._convert_time()
         self._calculate_time_diff()
-        self._handle_missing_elevation()  # New method to handle NaNs
-        self._normalize_coordinates()     # Updated to include elevation
+        self._handle_missing_elevation()
+        self._normalize_coordinates() 
         return self.df
     
     def create_sequences(self, processed_df, sequence_length=5):
@@ -34,7 +34,7 @@ class GPXDataProcessor:
         
         for track_id, track in processed_df.groupby('source_file'):
             # Include elevation in features, targets are still coordinates
-            features = track[['latitude_norm', 'longitude_norm', 'elevation_norm']].values
+            features = track[['latitude_norm', 'longitude_norm', 'elevation_norm', 'time_seconds_norm']].values
             targets = track[['latitude_norm', 'longitude_norm']].values
             
             if len(features) >= sequence_length:
@@ -53,12 +53,13 @@ class GPXDataProcessor:
 
     def _normalize_coordinates(self):
         """Normalize latitude, longitude, and elevation."""
-        features = ["latitude", "longitude", "elevation"]
+        features = ["latitude", "longitude", "elevation", "time_seconds"]
         self.scaler = StandardScaler()
         scaled = self.scaler.fit_transform(self.df[features])
         self.df["latitude_norm"] = scaled[:, 0]
         self.df["longitude_norm"] = scaled[:, 1]
         self.df["elevation_norm"] = scaled[:, 2]
+        self.df["time_seconds_norm"] = scaled[:, 3]  # New normalized column
 
     def _convert_time(self):
         """Convert time to seconds since the start of each track."""
