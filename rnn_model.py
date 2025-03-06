@@ -25,7 +25,7 @@ class RNNTracker:
         """Construct the LSTM architecture"""
         inputs = Input(shape=self.input_shape)  # Define input layer
         x = LSTM(self.lstm_units, activation=self.activation, return_sequences=False)(inputs)
-        outputs = Dense(2)(x)  # Predicts (lat_norm, lon_norm)
+        outputs = Dense(2)(x)  # Predicts (lat_norm, lon_norm, seconds_since_start_norm)
 
         model = Model(inputs=inputs, outputs=outputs)  # Functional API model
         return model
@@ -39,7 +39,7 @@ class RNNTracker:
             metrics=_metrics
         )
         
-    def train(self, X_train, y_train, epochs=100, batch_size=32, validation_data=None):
+    def train(self, X_train, y_train, epochs=100, batch_size=64, validation_data=None):
         """Train the model with optional validation data"""
         return self.model.fit(
             X_train, 
@@ -49,7 +49,7 @@ class RNNTracker:
             validation_data=validation_data
         )
     
-    def evaluate(self, X_test, y_test, batch_size=32):
+    def evaluate(self, X_test, y_test, batch_size=64):
         """Evaluate model performance on test data"""
         return self.model.evaluate(X_test, y_test, batch_size=batch_size)
     

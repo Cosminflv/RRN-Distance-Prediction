@@ -1,14 +1,10 @@
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-
-from sklearn.preprocessing import StandardScaler
 
 class GPXDataProcessor:
-    def __init__(self, dataframe):
+    def __init__(self, dataframe, scaler):
         self.df = dataframe.copy()
-        self.scaler = None  # For coordinate normalization
+        self.scaler = scaler  # For data normalization
 
     def process_data(self):
         """Process data: handle missing elevation, normalize features, and calculate time features."""
@@ -54,7 +50,6 @@ class GPXDataProcessor:
     def _normalize_coordinates(self):
         """Normalize latitude, longitude, and elevation."""
         features = ["latitude", "longitude", "elevation", "time_seconds"]
-        self.scaler = StandardScaler()
         scaled = self.scaler.fit_transform(self.df[features])
         self.df["latitude_norm"] = scaled[:, 0]
         self.df["longitude_norm"] = scaled[:, 1]

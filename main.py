@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+from sklearn.discriminant_analysis import StandardScaler
 from data_processor import GPXDataProcessor
 from gpx_data_parser import GPXParser
 from rnn_model import RNNTracker
@@ -19,10 +20,10 @@ def parse_gpx_data(gpx_files):
 
 
 # ------------------------- Data Processing -------------------------
-def process_data(df):
+def process_data(df, scaler=None):
     """Processes raw GPX data and returns the normalized DataFrame."""
-    processor = GPXDataProcessor(df)
-    return processor.process_data()
+    processor = GPXDataProcessor(df, scaler)
+    return processor, processor.process_data()
 
 
 def create_sequences(processor, df, sequence_length=15):
@@ -47,10 +48,15 @@ def main():
 
     train_df, test_df, val_df = map(parse_gpx_data, [train_files, test_files, val_files])
 
-    # Process data
-    processor_train, processor_test, processor_val = map(GPXDataProcessor, [train_df, test_df, val_df])
-    train_df_norm, test_df_norm, val_df_norm = map(lambda p: p.process_data(), 
-                                                   [processor_train, processor_test, processor_val])
+    # Initialize shared scaler
+    shared_scaler = StandardScaler()
+
+    # Process data with shared scaler
+    processor_train, train_df_norm = process_data(train_df, shared_scaler)
+    shared_scaler = processor_train.scaler  # Save scaler after first processing
+
+    processor_test, test_df_norm = process_data(test_df, shared_scaler)
+    processor_val, val_df_norm = process_data(val_df, shared_scaler)
 
     # Create sequences
     X_train, y_train = create_sequences(processor_train, train_df_norm)
@@ -66,10 +72,10 @@ def main():
 
     # ------------------------- Model Training -------------------------
     tracker = RNNTracker(input_shape=(15, 4))  # Assuming (sequence_length=15, features=4)
-    tracker.compile(loss='mse', metrics=['accuracy'])
+    tracker.compile(loss='mse', metrics=['mae'])
     tracker.summary()
 
-    history = tracker.train(X_train, y_train, epochs=30, validation_data=(X_val, y_val))
+    history = tracker.train(X_train, y_train, epochs=5, validation_data=(X_val, y_val))
     loss, accuracy = tracker.evaluate(X_test, y_test, batch_size=64)
 
     print(f"Test loss: {loss}, Test accuracy: {accuracy}")
@@ -77,7 +83,7 @@ def main():
     # ------------------------- Model Evaluation & Visualization -------------------------
     tracker.history = history
     tracker.plot_training_curves(metric='loss')
-    tracker.plot_training_curves(metric='accuracy')
+    tracker.plot_training_curves(metric='mae')
     tracker.plot_actual_vs_predicted(X_test, y_test, sample_points=200)
     tracker.plot_error_distributions(X_test, y_test)
     tracker.plot_residual_autocorrelation(X_test, y_test)
