@@ -1,5 +1,6 @@
 from keras.models import Model
 from keras.layers import LSTM, Dense, Input
+from sklearn.metrics import r2_score
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,7 +26,7 @@ class RNNTracker:
         """Construct the LSTM architecture"""
         inputs = Input(shape=self.input_shape)  # Define input layer
         x = LSTM(self.lstm_units, activation=self.activation, return_sequences=False)(inputs)
-        outputs = Dense(3)(x)  # Predicts (lat_norm, lon_norm, seconds_since_start_norm)
+        outputs = Dense(1)(x)  # Predicts (meters ahead) distance
 
         model = Model(inputs=inputs, outputs=outputs)  # Functional API model
         return model
@@ -122,6 +123,34 @@ class RNNTracker:
         plt.ylabel('Predicted Normalized Time')
         plt.title('Time Prediction Correlation')
         plt.grid(True)
+        plt.show()
+
+    def plot_actual_vs_predicted(self, X, y_true, figsize=(10, 6)):
+        """
+        Creates a scatter plot comparing actual vs predicted values
+        with a 45-degree reference line and R² score.
+        """
+
+        y_pred = self.predict(X)
+
+        plt.figure(figsize=figsize)
+        
+        # Create scatter plot
+        plt.scatter(y_true, y_pred, alpha=0.5, label='Predictions')
+        
+        # Add 45-degree reference line
+        max_val = max(np.max(y_true), np.max(y_pred))
+        plt.plot([0, max_val], [0, max_val], 'k--', label='Perfect prediction')
+        
+        # Calculate R² score
+        r2 = r2_score(y_true, y_pred)
+        
+        # Add labels and title
+        plt.xlabel('Actual Distance (meters)')
+        plt.ylabel('Predicted Distance (meters)')
+        plt.title(f'Actual vs Predicted Distance\nR² Score: {r2:.3f}')
+        plt.grid(True)
+        plt.legend()
         plt.show()
 
     def plot_error_distributions(self, X, y_true, figsize=(12, 5)):

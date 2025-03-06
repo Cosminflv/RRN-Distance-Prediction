@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+time_to_predict_position = 4  # Predict position 4 seconds ahead
+
 class GPXDataProcessor:
     def __init__(self, dataframe, scaler):
         self.df = dataframe.copy()
@@ -17,29 +19,47 @@ class GPXDataProcessor:
     def create_sequences(self, processed_df, sequence_length=5):
         """
         Create sequences with elevation included in input features.
-        
-        Args:
-            processed_df: DataFrame from process_data()
-            sequence_length: Historical points per sequence
-            
         Returns:
-            X: Input sequences with shape (n_samples, sequence_length, 3)
-            y: Target coordinates with shape (n_samples, 2)
+            X: Input sequences (n_samples, sequence_length, 4)
+            y: Target distances in meters (n_samples,)
         """
         X, y = [], []
         
         for track_id, track in processed_df.groupby('source_file'):
-            # Include elevation in features, targets are still coordinates
+            orig_lat = track['latitude'].values
+            orig_lon = track['longitude'].values
+            orig_time = track['time_seconds'].values
             features = track[['latitude_norm', 'longitude_norm', 'elevation_norm', 'time_seconds_norm']].values
-            targets = track[['latitude_norm', 'longitude_norm', 'time_seconds_norm']].values
             
-            if len(features) >= sequence_length:
-                for i in range(sequence_length, len(features)):
-                    if i + 30 < len(features):
-                        X.append(features[i-sequence_length:i])
-                        y.append(targets[i + 30])
+            for i in range(sequence_length, len(features)):
+                last_idx = i - 1
+                target_time = orig_time[last_idx] + time_to_predict_position
+                
+                # Find first point after prediction_time
+                mask = orig_time[i:] >= target_time
+                if not mask.any():
+                    continue
+                j = i + np.argmax(mask)
+                
+                # Calculate Haversine distance
+                distance = self._haversine(
+                    orig_lon[last_idx], orig_lat[last_idx],
+                    orig_lon[j], orig_lat[j]
+                )
+                
+                X.append(features[i-sequence_length:i])
+                y.append(distance)
         
         return np.array(X), np.array(y)
+
+    @staticmethod
+    def _haversine(lon1, lat1, lon2, lat2):
+        """Calculate distance in meters between two geographic points"""
+        lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
+        return 2 * 6371 * 1000 * np.arcsin(np.sqrt(a))  # Meters
 
     def _handle_missing_elevation(self):
         """Fill missing elevation values within each track."""
