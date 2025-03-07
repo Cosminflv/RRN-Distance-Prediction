@@ -74,7 +74,7 @@ def main():
     tracker.compile(loss='mse', metrics=['mae'])
     tracker.summary()
 
-    history = tracker.train(X_train, y_train, epochs=20, validation_data=(X_val, y_val))
+    history = tracker.train(X_train, y_train, epochs=100, validation_data=(X_val, y_val))
     loss, accuracy = tracker.evaluate(X_test, y_test, batch_size=64)
 
     print(f"Test loss: {loss}, Test accuracy: {accuracy}")

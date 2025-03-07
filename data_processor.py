@@ -24,6 +24,7 @@ class GPXDataProcessor:
             y: Target distances in meters (n_samples,)
         """
         X, y = [], []
+        all_distances = []  # To collect distances for scaling
         
         for track_id, track in processed_df.groupby('source_file'):
             orig_lat = track['latitude'].values
@@ -48,9 +49,17 @@ class GPXDataProcessor:
                 )
                 
                 X.append(features[i-sequence_length:i])
-                y.append(distance)
+                all_distances.append(distance)
         
-        return np.array(X), np.array(y)
+
+            # Normalize all distances at once
+        all_distances = np.array(all_distances).reshape(-1, 1)
+        y_normalized = self.scaler.fit_transform(all_distances)
+        
+        # Split normalized targets back into sequences
+        y = y_normalized.flatten()
+        
+        return np.array(X), y
 
     @staticmethod
     def _haversine(lon1, lat1, lon2, lat2):
