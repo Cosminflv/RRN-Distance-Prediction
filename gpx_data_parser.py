@@ -33,24 +33,24 @@ class GPXParser:
         self.data = pd.DataFrame(trackpoints)
         
         # REMOVE DUPLICATES
-        # # Handle NaN values for proper duplicate checking
-        # temp_df = self.data.copy()
-        # # Replace NaN with placeholders
-        # temp_df['elevation'] = temp_df['elevation'].fillna(-9999)
-        # temp_df['time'] = temp_df['time'].fillna('NaT')
+        # Handle NaN values for proper duplicate checking
+        temp_df = self.data.copy()
+        # Replace NaN with placeholders
+        temp_df['elevation'] = temp_df['elevation'].fillna(-9999)
+        temp_df['time'] = temp_df['time'].fillna('NaT')
         
-        # # Drop duplicates considering all attributes
-        # temp_df = temp_df.drop_duplicates(
-        #     subset=['latitude', 'longitude', 'elevation']
-        # )
+        # Drop duplicates considering all attributes
+        temp_df = temp_df.drop_duplicates(
+            subset=['latitude', 'longitude', 'elevation']
+        )
 
-        # removed_items_count =  self.data.size - temp_df.size 
+        removed_items_count =  self.data.size - temp_df.size 
         
-        # # Restore original NaN values
-        # temp_df['elevation'] = temp_df['elevation'].replace(-9999, None)
-        # temp_df['time'] = temp_df['time'].replace('NaT', None)
+        # Restore original NaN values
+        temp_df['elevation'] = temp_df['elevation'].replace(-9999, None)
+        temp_df['time'] = temp_df['time'].replace('NaT', None)
         
-        # self.data = temp_df
+        self.data = temp_df
         return self.data
 
     def get_dataframe(self):
