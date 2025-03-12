@@ -4,19 +4,22 @@ import pandas as pd
 time_to_predict_position = 4  # Predict position 4 seconds ahead
 
 class GPXDataProcessor:
-    def __init__(self, dataframe, scaler):
+    def __init__(self, dataframe, coords_scaler, elevation_scaler, time_scaler, distance_scaler):
         self.df = dataframe.copy()
-        self.scaler = scaler  # For data normalization
+        self.coords_scaler = coords_scaler  # For data normalization
+        self.elevation_scaler = elevation_scaler
+        self.time_scaler = time_scaler  # For time normalization
+        self.distance_scaler = distance_scaler  # For distance normalization
 
     def process_data(self):
         """Process data: handle missing elevation, normalize features, and calculate time features."""
         self._convert_time()
         self._calculate_time_diff()
         self._handle_missing_elevation()
-        self._normalize_coordinates() 
+        self._normalize_features() 
         return self.df
     
-    def create_sequences(self, processed_df, sequence_length=5):
+    def create_sequences(self, processed_df, sequence_length=5, is_train=True):
         """
         Create sequences with elevation included in input features.
         Returns:
@@ -54,7 +57,9 @@ class GPXDataProcessor:
 
             # Normalize all distances at once
         all_distances = np.array(all_distances).reshape(-1, 1)
-        y_normalized = self.scaler.fit_transform(all_distances)
+        if(is_train):
+            self.distance_scaler.fit(all_distances)
+        y_normalized = self.distance_scaler.transform(np.array(all_distances).reshape(-1, 1))
         
         # Split normalized targets back into sequences
         y = y_normalized.flatten()
@@ -76,14 +81,17 @@ class GPXDataProcessor:
             lambda x: x.fillna(method='ffill').fillna(method='bfill'))
         self.df['elevation'] = self.df['elevation'].fillna(0)
 
-    def _normalize_coordinates(self):
+    def _normalize_features(self):
         """Normalize latitude, longitude, and elevation."""
-        features = ["latitude", "longitude", "elevation", "time_seconds"]
-        scaled = self.scaler.fit_transform(self.df[features])
-        self.df["latitude_norm"] = scaled[:, 0]
-        self.df["longitude_norm"] = scaled[:, 1]
-        self.df["elevation_norm"] = scaled[:, 2]
-        self.df["time_seconds_norm"] = scaled[:, 3]  # New normalized column
+
+        coordinates_features = ["latitude", "longitude"]
+        scaled_coords = self.coords_scaler.transform(self.df[coordinates_features])
+        scaled_elevation = self.elevation_scaler.transform(self.df[["elevation"]])
+        scaled_time = self.time_scaler.transform(self.df[["time_seconds"]])
+        self.df["latitude_norm"] = scaled_coords[:, 0]
+        self.df["longitude_norm"] = scaled_coords[:, 1]
+        self.df["elevation_norm"] = scaled_elevation[:, 0]
+        self.df["time_seconds_norm"] = scaled_time[:, 0]  # New normalized column
 
     def _convert_time(self):
         """Convert time to seconds since the start of each track."""
