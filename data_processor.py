@@ -4,12 +4,13 @@ import pandas as pd
 time_to_predict_position = 4  # Predict position 4 seconds ahead
 
 class GPXDataProcessor:
-    def __init__(self, dataframe, coords_scaler, elevation_scaler, time_scaler, distance_scaler):
+    def __init__(self, dataframe, coords_scaler, elevation_scaler, time_scaler, distance_scaler_pred, distance_scaler_cum):
         self.df = dataframe.copy()
         self.coords_scaler = coords_scaler  # For data normalization
         self.elevation_scaler = elevation_scaler
         self.time_scaler = time_scaler  # For time normalization
-        self.distance_scaler = distance_scaler  # For distance normalization
+        self.distance_scaler_pred = distance_scaler_pred  # For predicted distance normalization
+        self.distance_scaler_cum = distance_scaler_cum
 
     def process_data(self):
         """Process data: handle missing elevation, normalize features, and calculate time features."""
@@ -21,49 +22,69 @@ class GPXDataProcessor:
     
     def create_sequences(self, processed_df, sequence_length=5, is_train=True):
         """
-        Create sequences with elevation included in input features.
+        Create sequences with elevation and cumulative distance included in input features.
+
         Returns:
-            X: Input sequences (n_samples, sequence_length, 4)
-            y: Target distances in meters (n_samples,)
+             X: Input sequences (n_samples, sequence_length, 5)  # Note: now 5 features per time step
+             y: Target distances in meters (n_samples,)
         """
         X, y = [], []
         all_distances = []  # To collect distances for scaling
-        
+
         for track_id, track in processed_df.groupby('source_file'):
             orig_lat = track['latitude'].values
             orig_lon = track['longitude'].values
             orig_time = track['time_seconds'].values
+            # Existing normalized features
             features = track[['latitude_norm', 'longitude_norm', 'elevation_norm', 'time_seconds_norm']].values
+
+            # Compute cumulative distance from the first point along the track.
+            cumulative_distance = np.zeros(len(track))
+            for idx in range(1, len(track)):
+                cumulative_distance[idx] = cumulative_distance[idx-1] + self._haversine(
+                    orig_lon[idx-1], orig_lat[idx-1],
+                    orig_lon[idx], orig_lat[idx]
+                )
             
-            for i in range(sequence_length, len(features)):
+            if is_train:
+                # Fit the cumulative distance scaler on training data
+                self.distance_scaler_cum.fit(cumulative_distance.reshape(-1, 1))
+            
+            # Normalize cumulative distance
+            scaled_cumulative_distance = self.distance_scaler_cum.transform(cumulative_distance.reshape(-1, 1))
+
+            # Add the cumulative distance as a new feature column.
+            # new_features will have shape (n_points, 5)
+            new_features = np.hstack((features, scaled_cumulative_distance))
+
+            # Loop to create sequences for this track
+            for i in range(sequence_length, len(new_features)):
                 last_idx = i - 1
                 target_time = orig_time[last_idx] + time_to_predict_position
-                
-                # Find first point after prediction_time
+
+                # Find the first point after target_time
                 mask = orig_time[i:] >= target_time
                 if not mask.any():
                     continue
                 j = i + np.argmax(mask)
-                
-                # Calculate Haversine distance
+
+                # Calculate Haversine distance as target output
                 distance = self._haversine(
                     orig_lon[last_idx], orig_lat[last_idx],
                     orig_lon[j], orig_lat[j]
                 )
-                
-                X.append(features[i-sequence_length:i])
-                all_distances.append(distance)
-        
 
-            # Normalize all distances at once
+                # Append the sequence of features and target distance
+                X.append(new_features[i-sequence_length:i])
+                all_distances.append(distance)
+
+        # Normalize all target distances at once
         all_distances = np.array(all_distances).reshape(-1, 1)
-        if(is_train):
-            self.distance_scaler.fit(all_distances)
-        y_normalized = self.distance_scaler.transform(np.array(all_distances).reshape(-1, 1))
-        
-        # Split normalized targets back into sequences
+        if is_train:
+            self.distance_scaler_pred.fit(all_distances)
+        y_normalized = self.distance_scaler_pred.transform(all_distances)
         y = y_normalized.flatten()
-        
+
         return np.array(X), y
 
     @staticmethod

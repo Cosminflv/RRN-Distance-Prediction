@@ -35,9 +35,9 @@ def pre_process_for_fitting(df):
     df['elevation'] = df['elevation'].fillna(0)
     return df
 
-def process_data(df, coords_scaler, elevation_scaler, time_scaler, distance_scaler):
+def process_data(df, coords_scaler, elevation_scaler, time_scaler, pred_distance_scaler, cum_distance_scaler):
     """Processes raw GPX data using pre-fitted scalers and returns the normalized DataFrame."""
-    processor = GPXDataProcessor(df, coords_scaler, elevation_scaler, time_scaler, distance_scaler)
+    processor = GPXDataProcessor(df, coords_scaler, elevation_scaler, time_scaler, pred_distance_scaler, cum_distance_scaler)
     return processor, processor.process_data()
 
 def create_sequences(processor, df, sequence_length=15, is_train=False):
@@ -69,18 +69,35 @@ def main():
     time_scaler = MinMaxScaler(feature_range=(0, 1)).fit(train_df_pre[['time_seconds']])
     # For distance_scaler, you may want to compute training distances first or decide on a reasonable range.
     # Here, we assume it is pre-fitted or you can leave it unfitted if you later fit it on computed training distances.
-    distance_scaler = MinMaxScaler(feature_range=(0, 1))
+    pred_distance_scaler = MinMaxScaler(feature_range=(0, 1))
+    cum_distance_scaler = MinMaxScaler(feature_range=(0, 1))
+
 
     # Process training data with pre-fitted scalers.
-    processor_train, train_df_norm = process_data(train_df_raw, coordinates_scaler, elevation_scaler, time_scaler, distance_scaler)
+    processor_train, train_df_norm = process_data(train_df_raw, 
+                                                  coordinates_scaler, 
+                                                  elevation_scaler, 
+                                                  time_scaler, 
+                                                  pred_distance_scaler,
+                                                  cum_distance_scaler)
     # For test and validation data, use the same pre-fitted scalers.
-    processor_test, test_df_norm = process_data(test_df_raw, coordinates_scaler, elevation_scaler, time_scaler, distance_scaler)
-    processor_val, val_df_norm = process_data(val_df_raw, coordinates_scaler, elevation_scaler, time_scaler, distance_scaler)
+    processor_test, test_df_norm = process_data(test_df_raw, 
+                                                  coordinates_scaler, 
+                                                  elevation_scaler, 
+                                                  time_scaler, 
+                                                  pred_distance_scaler,
+                                                  cum_distance_scaler)
+    processor_val, val_df_norm = process_data(val_df_raw, 
+                                                  coordinates_scaler, 
+                                                  elevation_scaler, 
+                                                  time_scaler, 
+                                                  pred_distance_scaler,
+                                                  cum_distance_scaler)
 
     # Create sequences for training, test, and validation sets.
-    X_train, y_train = create_sequences(processor_train, train_df_norm, sequence_length=30, is_train=True)
-    X_test, y_test = create_sequences(processor_test, test_df_norm, sequence_length=30, is_train=False)
-    X_val, y_val = create_sequences(processor_val, val_df_norm, sequence_length=30, is_train=False)
+    X_train, y_train = create_sequences(processor_train, train_df_norm, sequence_length=50, is_train=True)
+    X_test, y_test = create_sequences(processor_test, test_df_norm, sequence_length=50, is_train=False)
+    X_val, y_val = create_sequences(processor_val, val_df_norm, sequence_length=50, is_train=False)
 
     # Shuffle the data
     X_train, y_train = shuffle_data(X_train, y_train)
@@ -90,11 +107,11 @@ def main():
     print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
 
     # ------------------------- Model Training -------------------------
-    tracker = RNNTracker(input_shape=(30, 4))  # (sequence_length=30, features=4)
+    tracker = RNNTracker(input_shape=(50, 5))  # (sequence_length=50, features=5)
     tracker.compile(loss='mse', metrics=['mae'])
     tracker.summary()
 
-    history = tracker.train(X_train, y_train, epochs=20, validation_data=(X_val, y_val))
+    history = tracker.train(X_train, y_train, epochs=30, validation_data=(X_val, y_val))
     loss, accuracy = tracker.evaluate(X_test, y_test, batch_size=64)
 
     print(f"Test loss: {loss}, Test accuracy: {accuracy}")
