@@ -33,7 +33,7 @@ class RNNTracker:
     
     def compile(self, optimizer='adam', loss='mse', metrics=None):
         """Configure the model training parameters"""
-        _metrics = metrics or ['mae']  # Mean Absolute Error more meaningful than accuracy
+        _metrics = metrics or ['accuracy']  # Mean Absolute Error more meaningful than accuracy
         self.model.compile(
             optimizer=optimizer,
             loss=loss,
@@ -82,8 +82,8 @@ class RNNTracker:
         
         plt.figure(figsize=figsize)
         plt.plot(self.history.history[metric], label=f'Training {metric}')
-        plt.plot(self.history.history[f'val_{metric}'], label=f'Validation {metric}')
-        plt.title(f'Training vs Validation {metric.upper()}')
+        # plt.plot(self.history.history[f'val_{metric}'], label=f'Validation {metric}')
+        plt.title(f'Training loss {metric.upper()}')
         plt.xlabel('Epochs')
         plt.ylabel(metric.upper())
         plt.legend()

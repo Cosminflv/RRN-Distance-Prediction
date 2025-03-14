@@ -51,6 +51,22 @@ def shuffle_data(X, y, seed=42):
     np.random.shuffle(data)
     return map(np.array, zip(*data))
 
+def haversine(lon1, lat1, lon2, lat2):
+    """Calculate distance in meters between two geographic points"""
+    lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
+    return 2 * 6371 * 1000 * np.arcsin(np.sqrt(a))  # Meters
+
+from datetime import datetime
+
+def time_difference(timestamp1, timestamp2):
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    dt1 = datetime.strptime(timestamp1, fmt)
+    dt2 = datetime.strptime(timestamp2, fmt)
+    return abs((dt2 - dt1).total_seconds())
+
 # ------------------------- Main Execution -------------------------
 def main():
     # Load and parse GPX files for train, test, and validation sets
@@ -60,67 +76,127 @@ def main():
 
     train_df_raw, test_df_raw, val_df_raw = map(parse_gpx_data, [train_files, test_files, val_files])
 
-    # Preprocess training data (without normalization) to compute necessary columns
-    train_df_pre = pre_process_for_fitting(train_df_raw)
 
-    # ----------------- Pre-Fit Scalers on Training Data -----------------
-    coordinates_scaler = StandardScaler().fit(train_df_pre[['latitude', 'longitude']])
-    elevation_scaler = StandardScaler().fit(train_df_pre[['elevation']])
-    time_scaler = MinMaxScaler(feature_range=(0, 1)).fit(train_df_pre[['time_seconds']])
-    # For distance_scaler, you may want to compute training distances first or decide on a reasonable range.
-    # Here, we assume it is pre-fitted or you can leave it unfitted if you later fit it on computed training distances.
-    pred_distance_scaler = MinMaxScaler(feature_range=(0, 1))
-    cum_distance_scaler = MinMaxScaler(feature_range=(0, 1))
+    train_data = np.array(train_df_raw[['latitude', 'longitude', 'elevation', 'time', 'source_file' ]]).tolist()
+
+    # Precompute cumulative distances for training data
+    cumulative_distances = []
+    current_source = None
+    cumulative_dist = 0.0
+    prev_lat, prev_lon = None, None
+
+    for i, (lat, lon, elv, elapsed_time, s_file) in enumerate(train_data):
+        if i == 0 or s_file != current_source:
+            # Reset for new track
+            current_source = s_file
+            cumulative_dist = 0.0
+            prev_lat, prev_lon = lat, lon
+        else:
+            # Accumulate distance within the same track
+            dist = haversine(prev_lat, prev_lon, lat, lon)
+            cumulative_dist += dist
+            prev_lat, prev_lon = lat, lon
+        cumulative_distances.append(cumulative_dist)
+
+    # Find max cumulative distance in training data for scaling
+    max_cum_dist = max(cumulative_distances)
+
+    X_train = []
+    Y_train = []
+
+    seq_lenght = 50
+    next_poitn_dist_pos = 10
+    temp_list = []
+    init_ts = train_data[0][3]
+    for i, (lat, lon, elv, elapsed_time, s_file) in enumerate(train_data):
+        scaled_cum_dist = cumulative_distances[i] / max_cum_dist  # [0, 1]
+        temp_list.append([(lat+90)/180, (lon+180)/360, elv/8000, scaled_cum_dist])
+        if  i+next_poitn_dist_pos>=len(train_data):
+            break
+        if(len(temp_list) == seq_lenght):
+            lat2, lon2 = train_data[i+next_poitn_dist_pos][0], train_data[i+next_poitn_dist_pos][1] if i+next_poitn_dist_pos < len(train_data) else (-1,-1)
+            if lat2 == -1:
+                break
+            if haversine(lat, lon, lat2, lon2) != 0:        
+                X_train.append(temp_list)             
+                Y_train.append(haversine(lat, lon, lat2, lon2))
+            temp_list = []
+            init_ts = train_data[i+1][3]
 
 
-    # Process training data with pre-fitted scalers.
-    processor_train, train_df_norm = process_data(train_df_raw, 
-                                                  coordinates_scaler, 
-                                                  elevation_scaler, 
-                                                  time_scaler, 
-                                                  pred_distance_scaler,
-                                                  cum_distance_scaler)
-    # For test and validation data, use the same pre-fitted scalers.
-    processor_test, test_df_norm = process_data(test_df_raw, 
-                                                  coordinates_scaler, 
-                                                  elevation_scaler, 
-                                                  time_scaler, 
-                                                  pred_distance_scaler,
-                                                  cum_distance_scaler)
-    processor_val, val_df_norm = process_data(val_df_raw, 
-                                                  coordinates_scaler, 
-                                                  elevation_scaler, 
-                                                  time_scaler, 
-                                                  pred_distance_scaler,
-                                                  cum_distance_scaler)
+        
+
+
+                    # "latitude": lat,
+                    # "longitude": lon,
+                    # "elevation": float(ele.text) if ele is not None else None,
+                    # "time": time.text if time is not None else None,
+                    # "source_file": gpx_file
+
+    # # Preprocess training data (without normalization) to compute necessary columns
+    # train_df_pre = pre_process_for_fitting(train_df_raw)
+
+    # # ----------------- Pre-Fit Scalers on Training Data -----------------
+    # coordinates_scaler = StandardScaler().fit(train_df_pre[['latitude', 'longitude']])
+    # elevation_scaler = StandardScaler().fit(train_df_pre[['elevation']])
+    # time_scaler = MinMaxScaler(feature_range=(0, 1)).fit(train_df_pre[['time_seconds']])
+    # # For distance_scaler, you may want to compute training distances first or decide on a reasonable range.
+    # # Here, we assume it is pre-fitted or you can leave it unfitted if you later fit it on computed training distances.
+    # pred_distance_scaler = MinMaxScaler(feature_range=(0, 1))
+    # cum_distance_scaler = MinMaxScaler(feature_range=(0, 1))
+
+
+    # # Process training data with pre-fitted scalers.
+    # processor_train, train_df_norm = process_data(train_df_raw, 
+    #                                               coordinates_scaler, 
+    #                                               elevation_scaler, 
+    #                                               time_scaler, 
+    #                                               pred_distance_scaler,
+    #                                               cum_distance_scaler)
+    # # For test and validation data, use the same pre-fitted scalers.
+    # processor_test, test_df_norm = process_data(test_df_raw, 
+    #                                               coordinates_scaler, 
+    #                                               elevation_scaler, 
+    #                                               time_scaler, 
+    #                                               pred_distance_scaler,
+    #                                               cum_distance_scaler)
+    # processor_val, val_df_norm = process_data(val_df_raw, 
+    #                                               coordinates_scaler, 
+    #                                               elevation_scaler, 
+    #                                               time_scaler, 
+    #                                               pred_distance_scaler,
+    #                                               cum_distance_scaler)
 
     # Create sequences for training, test, and validation sets.
-    X_train, y_train = create_sequences(processor_train, train_df_norm, sequence_length=50, is_train=True)
-    X_test, y_test = create_sequences(processor_test, test_df_norm, sequence_length=50, is_train=False)
-    X_val, y_val = create_sequences(processor_val, val_df_norm, sequence_length=50, is_train=False)
+    # X_train, y_train = create_sequences(processor_train, train_df_norm, sequence_length=50, is_train=True)
+    # X_test, y_test = create_sequences(processor_test, test_df_norm, sequence_length=50, is_train=False)
+    # X_val, y_val = create_sequences(processor_val, val_df_norm, sequence_length=50, is_train=False)
 
     # Shuffle the data
-    X_train, y_train = shuffle_data(X_train, y_train)
-    X_test, y_test = shuffle_data(X_test, y_test)
-    X_val, y_val = shuffle_data(X_val, y_val)
+    # X_train, y_train = shuffle_data(X_train, Y_train)
+    # X_test, y_test = shuffle_data(X_test, y_test)
+    # X_val, y_val = shuffle_data(X_val, y_val)
 
-    print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
+    # print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
 
     # ------------------------- Model Training -------------------------
-    tracker = RNNTracker(input_shape=(50, 5))  # (sequence_length=50, features=5)
-    tracker.compile(loss='mse', metrics=['mae'])
+    tracker = RNNTracker(input_shape=(50, 4))  # (sequence_length=50, features=5)
+    tracker.compile(loss='mse', metrics=['accuracy'])
     tracker.summary()
+    X_train = np.array(X_train)
+    Y_train = np.array(Y_train)
+    Y_train = Y_train / np.max(Y_train)
 
-    history = tracker.train(X_train, y_train, epochs=30, validation_data=(X_val, y_val))
-    loss, accuracy = tracker.evaluate(X_test, y_test, batch_size=64)
 
-    print(f"Test loss: {loss}, Test accuracy: {accuracy}")
+    history = tracker.train(X_train, Y_train, epochs=100)#, validation_data=(X_val, y_val))
+
+    # print(f"Test loss: {loss}, Test accuracy: {accuracy}")
 
     # ------------------------- Model Evaluation & Visualization -------------------------
     tracker.history = history
     tracker.plot_training_curves(metric='loss')
-    tracker.plot_training_curves(metric='mae')
-    tracker.plot_actual_vs_predicted(X_test, y_test)
+    tracker.plot_training_curves(metric='accuracy')
+    tracker.plot_actual_vs_predicted(X_train, Y_train)
     x = 3
 
 if __name__ == "__main__":
