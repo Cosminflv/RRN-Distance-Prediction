@@ -1,3 +1,4 @@
+from collections import defaultdict
 import os
 import numpy as np
 import pandas as pd
@@ -73,6 +74,18 @@ def find_point_index_to_predict(elapsed_time, pred_sec_ahead):
             return i
     return -1
 
+def compute_sequence_distances(seq):
+    """
+    Given a sequence (list) of points, where each point is expected to have the 
+    structure [lat, lon, ...], compute the haversine distance between consecutive points.
+    """
+    distances = [0]
+    for i in range(1, len(seq)):
+        lat1, lon1 = seq[i-1][0], seq[i-1][1]
+        lat2, lon2 = seq[i][0], seq[i][1]
+        distances.append(haversine(lat1, lon1, lat2, lon2))
+    return distances
+
 # ------------------------- Main Execution -------------------------
 def main():
     # Load and parse GPX files for train, test, and validation sets
@@ -85,27 +98,6 @@ def main():
 
     train_data = np.array(train_df_raw[['latitude', 'longitude', 'elevation', 'elapsed_time', 'time', 'source_file' ]]).tolist()
 
-    # Precompute cumulative distances for training data
-    cumulative_distances = []
-    current_source = None
-    cumulative_dist = 0.0
-    prev_lat, prev_lon = None, None
-
-    for i, (lat, lon, _, _, _, s_file) in enumerate(train_data):
-        if i == 0 or s_file != current_source:
-            # Reset for new track
-            current_source = s_file
-            cumulative_dist = 0.0
-            prev_lat, prev_lon = lat, lon
-        else:
-            # Accumulate distance within the same track
-            dist = haversine(prev_lat, prev_lon, lat, lon)
-            cumulative_dist += dist
-            prev_lat, prev_lon = lat, lon
-        cumulative_distances.append(cumulative_dist)
-
-    # Find max cumulative distance in training data for scaling
-    max_cum_dist = max(cumulative_distances)
 
     X_train = []
     Y_train = []
@@ -117,11 +109,11 @@ def main():
     point_times = [point[3] for point in train_data]
     point_to_pred_pos = find_point_index_to_predict(point_times, pred_sec_ahead)
     for i, (lat, lon, elv, elapsed_time, timestamp, s_file) in enumerate(train_data):
-        scaled_cum_dist = cumulative_distances[i] / max_cum_dist  # [0, 1]
+         # scaled_cum_dist = distance_between_points[i] / max_dist  # [0, 1]
         elapsed_time_seq = time_difference(init_ts, timestamp)
         elapsed_time_next_point = time_difference(init_ts, train_data[i+point_to_pred_pos][4] if i+point_to_pred_pos < len(train_data) else train_data[i][4])
         elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point # [0, 1]
-        temp_list.append([(lat+90)/180, (lon+180)/360, elv/8000, scaled_cum_dist, elapsed_time_seq_scaled])
+        temp_list.append([(lat+90)/180, (lon+180)/360, elv/8000, elapsed_time_seq_scaled])
         if  i+point_to_pred_pos>=len(train_data):
             break
 
@@ -130,8 +122,19 @@ def main():
             if lat2 == -1:
                 break
 
+            sequence = train_data[i - seq_lenght + 1 : i + 1]
+
+            lat_lon_sequence = [(point[0], point[1]) for point in sequence]
+
+            sequence_distances = compute_sequence_distances(lat_lon_sequence)
+
+            max_distance = max(sequence_distances) if sequence_distances else 1 
+            normalized_sequence_distances = sequence_distances / max_distance
+
+            augmented_temp_list = [point + [norm_d] for point, norm_d in zip(temp_list, normalized_sequence_distances)]
+
             if haversine(lat, lon, lat2, lon2) != 0:        
-                X_train.append(temp_list)             
+                X_train.append(augmented_temp_list)             
                 Y_train.append(haversine(lat, lon, lat2, lon2))
             temp_list = []
             init_ts = train_data[i+1][4]
