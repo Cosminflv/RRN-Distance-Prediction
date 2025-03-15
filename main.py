@@ -105,18 +105,23 @@ def main():
     Y_train = []
 
     seq_lenght = 50
-    next_poitn_dist_pos = 10
+    next_poitn_dist_pos = 40
     temp_list = []
-    init_ts = train_data[0][3]
+    init_ts = train_data[0][3] # Timestamp for first point
     for i, (lat, lon, elv, elapsed_time, s_file) in enumerate(train_data):
         scaled_cum_dist = cumulative_distances[i] / max_cum_dist  # [0, 1]
-        temp_list.append([(lat+90)/180, (lon+180)/360, elv/8000, scaled_cum_dist])
+        elapsed_time_seq = time_difference(init_ts, elapsed_time)
+        elapsed_time_next_point = time_difference(init_ts, train_data[i+next_poitn_dist_pos][3] if i+next_poitn_dist_pos < len(train_data) else train_data[i][3])
+        elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point # [0, 1]
+        temp_list.append([(lat+90)/180, (lon+180)/360, elv/8000, scaled_cum_dist, elapsed_time_seq_scaled])
         if  i+next_poitn_dist_pos>=len(train_data):
             break
+
         if(len(temp_list) == seq_lenght):
             lat2, lon2 = train_data[i+next_poitn_dist_pos][0], train_data[i+next_poitn_dist_pos][1] if i+next_poitn_dist_pos < len(train_data) else (-1,-1)
             if lat2 == -1:
                 break
+
             if haversine(lat, lon, lat2, lon2) != 0:        
                 X_train.append(temp_list)             
                 Y_train.append(haversine(lat, lon, lat2, lon2))
@@ -180,12 +185,13 @@ def main():
     # print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
 
     # ------------------------- Model Training -------------------------
-    tracker = RNNTracker(input_shape=(50, 4))  # (sequence_length=50, features=5)
+    tracker = RNNTracker(input_shape=(50, 5))  # (sequence_length=50, features=5)
     tracker.compile(loss='mse', metrics=['accuracy'])
     tracker.summary()
     X_train = np.array(X_train)
     Y_train = np.array(Y_train)
-    Y_train = Y_train / np.max(Y_train)
+    scale_factor = np.max(Y_train)
+    Y_train = Y_train / scale_factor
 
 
     history = tracker.train(X_train, Y_train, epochs=100)#, validation_data=(X_val, y_val))
@@ -196,7 +202,7 @@ def main():
     tracker.history = history
     tracker.plot_training_curves(metric='loss')
     tracker.plot_training_curves(metric='accuracy')
-    tracker.plot_actual_vs_predicted(X_train, Y_train)
+    tracker.plot_actual_vs_predicted(X_train, Y_train, scale_factor)
     x = 3
 
 if __name__ == "__main__":

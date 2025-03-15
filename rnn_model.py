@@ -125,33 +125,49 @@ class RNNTracker:
         plt.grid(True)
         plt.show()
 
-    def plot_actual_vs_predicted(self, X, y_true, figsize=(10, 6)):
+    def plot_actual_vs_predicted(self, X, y_true, scale_factor, figsize=(10, 6)):
         """
-        Creates a scatter plot comparing actual vs predicted values
-        with a 45-degree reference line and R² score.
+        Creates a scatter plot comparing actual vs predicted values,
+        with a 45-degree reference line, R² score, and mean difference
+        in meters (after reversing the scaling).
+    
+        Parameters:
+        - X: Input features.
+        - y_true: True values (scaled).
+        - scale_factor: The factor used to scale the original distances.
+        - figsize: Size of the plot.
         """
-
-        y_pred = self.predict(X)
-
+        # Predict scaled values
+        y_pred_scaled = self.predict(X)
+        
+        # Reverse the scaling to recover distances in meters
+        y_pred = y_pred_scaled * scale_factor
+        y_true_unscaled = y_true * scale_factor
+    
+        # Calculate the absolute difference in meters
+        diff_meters = np.abs(y_pred - y_true_unscaled)
+        mean_diff = np.mean(diff_meters)
+    
         plt.figure(figsize=figsize)
         
-        # Create scatter plot
-        plt.scatter(y_true, y_pred, alpha=0.5, label='Predictions')
+        # Create scatter plot with unscaled values
+        plt.scatter(y_true_unscaled, y_pred, alpha=0.5, label='Predictions')
         
-        # Add 45-degree reference line
-        max_val = max(np.max(y_true), np.max(y_pred))
+        # Add 45-degree reference line (perfect prediction line)
+        max_val = max(np.max(y_true_unscaled), np.max(y_pred))
         plt.plot([0, max_val], [0, max_val], 'k--', label='Perfect prediction')
         
-        # Calculate R² score
-        r2 = r2_score(y_true, y_pred)
+        # Calculate R² score on unscaled data
+        r2 = r2_score(y_true_unscaled, y_pred)
         
-        # Add labels and title
+        # Add labels and title including the R² score and mean difference
         plt.xlabel('Actual Distance (meters)')
         plt.ylabel('Predicted Distance (meters)')
-        plt.title(f'Actual vs Predicted Distance\nR² Score: {r2:.3f}')
+        plt.title(f'Actual vs Predicted Distance\nR² Score: {r2:.3f} | Mean Diff: {mean_diff:.3f} m')
         plt.grid(True)
         plt.legend()
         plt.show()
+
 
     def plot_error_distributions(self, X, y_true, figsize=(12, 5)):
         """Histogram of latitude/longitude errors"""
