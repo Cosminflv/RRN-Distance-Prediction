@@ -67,6 +67,12 @@ def time_difference(timestamp1, timestamp2):
     dt2 = datetime.strptime(timestamp2, fmt)
     return abs((dt2 - dt1).total_seconds())
 
+def find_point_index_to_predict(elapsed_time, pred_sec_ahead):
+    for i in range(len(elapsed_time)):
+        if elapsed_time[i] >= pred_sec_ahead:
+            return i
+    return -1
+
 # ------------------------- Main Execution -------------------------
 def main():
     # Load and parse GPX files for train, test, and validation sets
@@ -77,7 +83,7 @@ def main():
     train_df_raw, test_df_raw, val_df_raw = map(parse_gpx_data, [train_files, test_files, val_files])
 
 
-    train_data = np.array(train_df_raw[['latitude', 'longitude', 'elevation', 'time', 'source_file' ]]).tolist()
+    train_data = np.array(train_df_raw[['latitude', 'longitude', 'elevation', 'elapsed_time', 'time', 'source_file' ]]).tolist()
 
     # Precompute cumulative distances for training data
     cumulative_distances = []
@@ -85,7 +91,7 @@ def main():
     cumulative_dist = 0.0
     prev_lat, prev_lon = None, None
 
-    for i, (lat, lon, elv, elapsed_time, s_file) in enumerate(train_data):
+    for i, (lat, lon, _, _, _, s_file) in enumerate(train_data):
         if i == 0 or s_file != current_source:
             # Reset for new track
             current_source = s_file
@@ -105,20 +111,22 @@ def main():
     Y_train = []
 
     seq_lenght = 50
-    next_poitn_dist_pos = 40
+    pred_sec_ahead = 142
     temp_list = []
-    init_ts = train_data[0][3] # Timestamp for first point
-    for i, (lat, lon, elv, elapsed_time, s_file) in enumerate(train_data):
+    init_ts = train_data[0][4] # Timestamp for first point
+    point_times = [point[3] for point in train_data]
+    point_to_pred_pos = find_point_index_to_predict(point_times, pred_sec_ahead)
+    for i, (lat, lon, elv, elapsed_time, timestamp, s_file) in enumerate(train_data):
         scaled_cum_dist = cumulative_distances[i] / max_cum_dist  # [0, 1]
-        elapsed_time_seq = time_difference(init_ts, elapsed_time)
-        elapsed_time_next_point = time_difference(init_ts, train_data[i+next_poitn_dist_pos][3] if i+next_poitn_dist_pos < len(train_data) else train_data[i][3])
+        elapsed_time_seq = time_difference(init_ts, timestamp)
+        elapsed_time_next_point = time_difference(init_ts, train_data[i+point_to_pred_pos][4] if i+point_to_pred_pos < len(train_data) else train_data[i][4])
         elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point # [0, 1]
         temp_list.append([(lat+90)/180, (lon+180)/360, elv/8000, scaled_cum_dist, elapsed_time_seq_scaled])
-        if  i+next_poitn_dist_pos>=len(train_data):
+        if  i+point_to_pred_pos>=len(train_data):
             break
 
         if(len(temp_list) == seq_lenght):
-            lat2, lon2 = train_data[i+next_poitn_dist_pos][0], train_data[i+next_poitn_dist_pos][1] if i+next_poitn_dist_pos < len(train_data) else (-1,-1)
+            lat2, lon2 = train_data[i+point_to_pred_pos][0], train_data[i+point_to_pred_pos][1] if i+point_to_pred_pos < len(train_data) else (-1,-1)
             if lat2 == -1:
                 break
 
@@ -126,7 +134,7 @@ def main():
                 X_train.append(temp_list)             
                 Y_train.append(haversine(lat, lon, lat2, lon2))
             temp_list = []
-            init_ts = train_data[i+1][3]
+            init_ts = train_data[i+1][4]
 
 
         

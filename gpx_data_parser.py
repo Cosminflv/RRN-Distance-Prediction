@@ -45,6 +45,10 @@ class GPXParser:
         )
 
         removed_items_count =  self.data.size - temp_df.size 
+
+        temp_df['time_dt'] = pd.to_datetime(temp_df['time'])
+        start_time = temp_df['time_dt'].iloc[0]
+        temp_df['elapsed_time'] = (temp_df['time_dt'] - start_time).dt.total_seconds()
         
         # Restore original NaN values
         temp_df['elevation'] = temp_df['elevation'].replace(-9999, None)
