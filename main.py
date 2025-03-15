@@ -12,10 +12,19 @@ def load_gpx_files(directory):
     """Returns a list of GPX file paths from the given directory."""
     return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.gpx')]
 
+def load_gpx_csv_files(directory):
+    """Returns a list of GPX file paths from the given directory."""
+    return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.csv')]
+
 def parse_gpx_data(gpx_files):
     """Parses GPX files and returns a DataFrame."""
     parser = GPXParser(gpx_files)
     return parser.get_dataframe()
+
+def parse_gpx_csv_data(gpx_files):
+    """Parses GPX files and returns a DataFrame."""
+    parser = GPXParser(gpx_files)
+    return parser.get_csv_dataframe()
 
 # ------------------------- Data Processing -------------------------
 def pre_process_for_fitting(df):
@@ -89,11 +98,14 @@ def compute_sequence_distances(seq):
 # ------------------------- Main Execution -------------------------
 def main():
     # Load and parse GPX files for train, test, and validation sets
+    train_files = load_gpx_csv_files('gpx_data/train')
     train_files = load_gpx_files('gpx_data/train')
     test_files = load_gpx_files('gpx_data/test')
     val_files = load_gpx_files('gpx_data/val')
 
-    train_df_raw, test_df_raw, val_df_raw = map(parse_gpx_data, [train_files, test_files, val_files])
+    train_df_raw = parse_gpx_csv_data(train_files)
+
+    # train_df_raw, test_df_raw, val_df_raw = map(parse_gpx_csv_data, [train_files, test_files, val_files])
 
 
     train_data = np.array(train_df_raw[['latitude', 'longitude', 'elevation', 'elapsed_time', 'time', 'source_file' ]]).tolist()
@@ -103,15 +115,16 @@ def main():
     Y_train = []
 
     seq_lenght = 50
-    pred_sec_ahead = 142
+    pred_sec_ahead = 500
     temp_list = []
     init_ts = train_data[0][4] # Timestamp for first point
     point_times = [point[3] for point in train_data]
     point_to_pred_pos = find_point_index_to_predict(point_times, pred_sec_ahead)
     for i, (lat, lon, elv, elapsed_time, timestamp, s_file) in enumerate(train_data):
-         # scaled_cum_dist = distance_between_points[i] / max_dist  # [0, 1]
         elapsed_time_seq = time_difference(init_ts, timestamp)
         elapsed_time_next_point = time_difference(init_ts, train_data[i+point_to_pred_pos][4] if i+point_to_pred_pos < len(train_data) else train_data[i][4])
+        if elapsed_time_next_point == 0:
+            continue
         elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point # [0, 1]
         temp_list.append([(lat+90)/180, (lon+180)/360, elv/8000, elapsed_time_seq_scaled])
         if  i+point_to_pred_pos>=len(train_data):
@@ -205,6 +218,7 @@ def main():
     Y_train = Y_train / scale_factor
 
 
+    X_train, Y_train = shuffle_data(X_train, Y_train)
     history = tracker.train(X_train, Y_train, epochs=100)#, validation_data=(X_val, y_val))
 
     # print(f"Test loss: {loss}, Test accuracy: {accuracy}")
