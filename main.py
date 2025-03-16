@@ -121,12 +121,12 @@ def main():
             continue  # Skip if no valid prediction position
 
         for i, (lat, lon, elv, elapsed_time, timestamp, s_file) in enumerate(points):
-            if i + point_to_pred_pos >= len(points):
+            if i + seq_length + point_to_pred_pos >= len(points):
                 break  # Not enough points ahead in this file
 
             if len(temp_list) == 0:
                 # Calculate elapsed_time_next_point for the new sequence
-                elapsed_time_next_point = time_difference(init_ts, points[i + point_to_pred_pos][4])
+                elapsed_time_next_point = time_difference(init_ts, points[i + seq_length + point_to_pred_pos][4])
 
             elapsed_time_seq = time_difference(init_ts, timestamp)
             elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point
@@ -220,7 +220,7 @@ def main():
     Y_train = Y_train / scale_factor
 
 
-    history = tracker.train(X_train, Y_train, epochs=50)#, validation_data=(X_val, y_val))
+    history = tracker.train(X_train, Y_train, epochs=100)#, validation_data=(X_val, y_val))
 
     # print(f"Test loss: {loss}, Test accuracy: {accuracy}")
 
