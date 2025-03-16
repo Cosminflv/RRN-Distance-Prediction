@@ -71,7 +71,7 @@ class RNNTracker:
         """Load model from filepath"""
         model = tf.keras.models.load_model(filepath)
         # Create dummy instance to return
-        instance = cls(input_shape=model.layers[0].input_shape[1:])
+        instance = cls(input_shape=model.input_shape[1:])
         instance.model = model
         return instance
     
@@ -125,7 +125,7 @@ class RNNTracker:
         plt.grid(True)
         plt.show()
 
-    def plot_actual_vs_predicted(self, X, y_true, scale_factor, figsize=(10, 6)):
+    def plot_actual_vs_predicted_unscaled(self, X, y_true, scale_factor, figsize=(10, 6)):
         """
         Creates a scatter plot comparing actual vs predicted values,
         with a 45-degree reference line, R² score, and mean difference

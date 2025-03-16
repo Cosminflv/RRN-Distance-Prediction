@@ -2,7 +2,6 @@ from collections import defaultdict
 import os
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from data_processor import GPXDataProcessor
 from gpx_data_parser import GPXParser
 from rnn_model import RNNTracker
@@ -67,6 +66,11 @@ def time_difference(timestamp1, timestamp2):
     dt1 = datetime.strptime(timestamp1, fmt)
     dt2 = datetime.strptime(timestamp2, fmt)
     return abs((dt2 - dt1).total_seconds())
+
+def convert_to_float(obj):
+    if isinstance(obj, list):
+        return [convert_to_float(item) for item in obj]
+    return float(obj)  # Convert individual elements
 
 def find_point_index_to_predict(elapsed_time, pred_sec_ahead):
     for i in range(len(elapsed_time)):
@@ -154,62 +158,24 @@ def main():
                 init_ts = points[i + 1][4] if i + 1 < len(points) else timestamp
 
 
-        
+    # ------------------------- Model Loading -------------------------
 
+    # tracker = RNNTracker.load("model.keras")
+    # tracker.summary()
+    # X_train = convert_to_float(X_train)
+    # X_train = np.array(X_train, dtype=np.float64) 
+    # print("Model expects input shape:", tracker.model.input_shape)
+    # print("X_train shape:", X_train.shape)
+    # scale_factor = np.max(Y_train)
+    # Y_train = convert_to_float(Y_train)
+    # Y_train = np.array(Y_train, dtype=np.float64)
+    # Y_train = Y_train / scale_factor
 
-                    # "latitude": lat,
-                    # "longitude": lon,
-                    # "elevation": float(ele.text) if ele is not None else None,
-                    # "time": time.text if time is not None else None,
-                    # "source_file": gpx_file
-
-    # # Preprocess training data (without normalization) to compute necessary columns
-    # train_df_pre = pre_process_for_fitting(train_df_raw)
-
-    # # ----------------- Pre-Fit Scalers on Training Data -----------------
-    # coordinates_scaler = StandardScaler().fit(train_df_pre[['latitude', 'longitude']])
-    # elevation_scaler = StandardScaler().fit(train_df_pre[['elevation']])
-    # time_scaler = MinMaxScaler(feature_range=(0, 1)).fit(train_df_pre[['time_seconds']])
-    # # For distance_scaler, you may want to compute training distances first or decide on a reasonable range.
-    # # Here, we assume it is pre-fitted or you can leave it unfitted if you later fit it on computed training distances.
-    # pred_distance_scaler = MinMaxScaler(feature_range=(0, 1))
-    # cum_distance_scaler = MinMaxScaler(feature_range=(0, 1))
-
-
-    # # Process training data with pre-fitted scalers.
-    # processor_train, train_df_norm = process_data(train_df_raw, 
-    #                                               coordinates_scaler, 
-    #                                               elevation_scaler, 
-    #                                               time_scaler, 
-    #                                               pred_distance_scaler,
-    #                                               cum_distance_scaler)
-    # # For test and validation data, use the same pre-fitted scalers.
-    # processor_test, test_df_norm = process_data(test_df_raw, 
-    #                                               coordinates_scaler, 
-    #                                               elevation_scaler, 
-    #                                               time_scaler, 
-    #                                               pred_distance_scaler,
-    #                                               cum_distance_scaler)
-    # processor_val, val_df_norm = process_data(val_df_raw, 
-    #                                               coordinates_scaler, 
-    #                                               elevation_scaler, 
-    #                                               time_scaler, 
-    #                                               pred_distance_scaler,
-    #                                               cum_distance_scaler)
-
-    # Create sequences for training, test, and validation sets.
-    # X_train, y_train = create_sequences(processor_train, train_df_norm, sequence_length=50, is_train=True)
-    # X_test, y_test = create_sequences(processor_test, test_df_norm, sequence_length=50, is_train=False)
-    # X_val, y_val = create_sequences(processor_val, val_df_norm, sequence_length=50, is_train=False)
-
-    # Shuffle the data
-    # X_train, y_train = shuffle_data(X_train, Y_train)
-    # X_test, y_test = shuffle_data(X_test, y_test)
-    # X_val, y_val = shuffle_data(X_val, y_val)
-
-    # print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
+    # tracker.plot_actual_vs_predicted_unscaled(X_train, Y_train, scale_factor)
+    
 
     # ------------------------- Model Training -------------------------
+    
     tracker = RNNTracker(input_shape=(50, 5))  # (sequence_length=50, features=5)
     tracker.compile(loss='mse', metrics=['accuracy'])
     tracker.summary()
@@ -222,13 +188,15 @@ def main():
 
     history = tracker.train(X_train, Y_train, epochs=100)#, validation_data=(X_val, y_val))
 
-    # print(f"Test loss: {loss}, Test accuracy: {accuracy}")
+    # # print(f"Test loss: {loss}, Test accuracy: {accuracy}")
 
-    # ------------------------- Model Evaluation & Visualization -------------------------
+    # # ------------------------- Model Evaluation & Visualization -------------------------
     tracker.history = history
-    tracker.plot_training_curves(metric='loss')
-    tracker.plot_training_curves(metric='accuracy')
-    tracker.plot_actual_vs_predicted(X_train, Y_train, scale_factor)
+    # tracker.plot_training_curves(metric='loss')
+    # tracker.plot_training_curves(metric='accuracy')
+    tracker.plot_actual_vs_predicted_unscaled(X_train, Y_train, scale_factor)
+
+    # tracker.model.save("model.keras")
     x = 3
 
 if __name__ == "__main__":
