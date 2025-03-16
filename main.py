@@ -110,12 +110,14 @@ def main():
     point_to_pred_pos = find_point_index_to_predict(point_times, pred_sec_ahead)
     for i, (lat, lon, elv, elapsed_time, timestamp, s_file) in enumerate(train_data):
          # scaled_cum_dist = distance_between_points[i] / max_dist  # [0, 1]
-        elapsed_time_seq = time_difference(init_ts, timestamp)
-        elapsed_time_next_point = time_difference(init_ts, train_data[i+point_to_pred_pos][4] if i+point_to_pred_pos < len(train_data) else train_data[i][4])
-        elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point # [0, 1]
-        temp_list.append([(lat+90)/180, (lon+180)/360, elv/8000, elapsed_time_seq_scaled])
         if  i+point_to_pred_pos>=len(train_data):
             break
+        if len(temp_list) == 0:
+            elapsed_time_next_point = time_difference(init_ts, train_data[i+point_to_pred_pos][4] if i+point_to_pred_pos < len(train_data) else train_data[i][4])
+
+        elapsed_time_seq = time_difference(init_ts, timestamp)
+        elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point # [0, 1]
+        temp_list.append([(lat+90)/180, (lon+180)/360, elv/8000, elapsed_time_seq_scaled])
 
         if(len(temp_list) == seq_lenght):
             lat2, lon2 = train_data[i+point_to_pred_pos][0], train_data[i+point_to_pred_pos][1] if i+point_to_pred_pos < len(train_data) else (-1,-1)
