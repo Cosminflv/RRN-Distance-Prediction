@@ -115,6 +115,7 @@ def main():
         if not points:
             continue
         init_ts = points[0][4]  # Initial timestamp for this file
+        temp_elapsed_dist = []
         point_times = [p[3] for p in points]
         point_to_pred_pos = find_point_index_to_predict(point_times, pred_sec_ahead)
         if point_to_pred_pos is None:
@@ -129,6 +130,13 @@ def main():
                 elapsed_time_next_point = time_difference(init_ts, points[i + seq_length + point_to_pred_pos][4])
 
             elapsed_time_seq = time_difference(init_ts, timestamp)
+
+            temp_elapsed_dist.append(
+            (temp_elapsed_dist[-1] if len(temp_elapsed_dist) > 0 else 0) + 
+            haversine(lat, lon, (points[i - 1][0] if len(temp_elapsed_dist) > 0 else lat), 
+                          (points[i - 1][1] if len(temp_elapsed_dist) > 0 else lon))
+            )
+
             elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point
             temp_list.append([(lat + 90)/180, (lon + 180)/360, elv/8000, elapsed_time_seq_scaled])
 
@@ -136,14 +144,19 @@ def main():
 
                 lat2, lon2 = points[i + point_to_pred_pos][0], points[i + point_to_pred_pos][1]
 
-                # Generate sequence and calculate distances
-                sequence = points[i - seq_length + 1 : i + 1]
-                lat_lon_sequence = [(p[0], p[1]) for p in sequence]
-                sequence_distances = compute_sequence_distances(lat_lon_sequence)
-                max_distance = max(sequence_distances) if sequence_distances else 1
-                normalized_distances = sequence_distances / max_distance
+                elasped_seq_dist_np = np.array(temp_elapsed_dist)
+                temp_elapsed_dist = (temp_elapsed_dist / np.max(elasped_seq_dist_np)).tolist()
 
-                augmented_temp_list = [point + [norm_d] for point, norm_d in zip(temp_list, normalized_distances)]
+                # Generate sequence and calculate distances
+                # sequence = points[i - seq_length + 1 : i + 1]
+                # lat_lon_sequence = [(p[0], p[1]) for p in sequence]
+                # sequence_distances = compute_sequence_distances(lat_lon_sequence)
+                # max_distance = max(sequence_distances) if sequence_distances else 1
+                # normalized_distances = sequence_distances / max_distance
+
+                # augmented_temp_list = [point + [norm_d] for point, norm_d in zip(temp_list, normalized_distances)]
+
+                augmented_temp_list = [point + [temp_elapsed_dist[i]] for i, point in enumerate(temp_list)]
 
                 if haversine(lat, lon, lat2, lon2) != 0:
                     X_train.append(augmented_temp_list)
@@ -151,7 +164,11 @@ def main():
 
                 # Reset for next sequence
                 temp_list = []
-                init_ts = points[i + 1][4] if i + 1 < len(points) else timestamp
+                temp_elapsed_dist = []
+                if i + 1 >= len(points):
+                    raise Exception("End of points array reached! Execution stopped.")
+                init_ts = points[i + 1][4]
+
 
 
         
