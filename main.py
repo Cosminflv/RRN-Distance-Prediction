@@ -95,51 +95,68 @@ def main():
 
     train_df_raw, test_df_raw, val_df_raw = map(parse_gpx_data, [train_files, test_files, val_files])
 
-
-    train_data = np.array(train_df_raw[['latitude', 'longitude', 'elevation', 'elapsed_time', 'time', 'source_file' ]]).tolist()
-
+    train_data = np.array(train_df_raw[['latitude', 'longitude', 'elevation', 'elapsed_time', 'time', 'source_file']]).tolist()
 
     X_train = []
     Y_train = []
 
-    seq_lenght = 50
-    pred_sec_ahead = 142
-    temp_list = []
-    init_ts = train_data[0][4] # Timestamp for first point
-    point_times = [point[3] for point in train_data]
-    point_to_pred_pos = find_point_index_to_predict(point_times, pred_sec_ahead)
-    for i, (lat, lon, elv, elapsed_time, timestamp, s_file) in enumerate(train_data):
-         # scaled_cum_dist = distance_between_points[i] / max_dist  # [0, 1]
-        if  i+point_to_pred_pos>=len(train_data):
-            break
-        if len(temp_list) == 0:
-            elapsed_time_next_point = time_difference(init_ts, train_data[i+point_to_pred_pos][4] if i+point_to_pred_pos < len(train_data) else train_data[i][4])
+    seq_length = 50
+    pred_sec_ahead = 3600  # 2 hours ahead
 
-        elapsed_time_seq = time_difference(init_ts, timestamp)
-        elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point # [0, 1]
-        temp_list.append([(lat+90)/180, (lon+180)/360, elv/8000, elapsed_time_seq_scaled])
+    # Group training data by source_file
+    from collections import defaultdict
+    file_groups = defaultdict(list)
+    for point in train_data:
+        source_file = point[5]
+        file_groups[source_file].append(point)
 
-        if(len(temp_list) == seq_lenght):
-            lat2, lon2 = train_data[i+point_to_pred_pos][0], train_data[i+point_to_pred_pos][1] if i+point_to_pred_pos < len(train_data) else (-1,-1)
-            if lat2 == -1:
-                break
+    for source_file, points in file_groups.items():
+        temp_list = []
+        if not points:
+            continue
+        init_ts = points[0][4]  # Initial timestamp for this file
+        point_times = [p[3] for p in points]
+        point_to_pred_pos = find_point_index_to_predict(point_times, pred_sec_ahead)
+        if point_to_pred_pos is None:
+            continue  # Skip if no valid prediction position
 
-            sequence = train_data[i - seq_lenght + 1 : i + 1]
+        for i, (lat, lon, elv, elapsed_time, timestamp, s_file) in enumerate(points):
+            if i + point_to_pred_pos >= len(points):
+                break  # Not enough points ahead in this file
 
-            lat_lon_sequence = [(point[0], point[1]) for point in sequence]
+            if len(temp_list) == 0:
+                # Calculate elapsed_time_next_point for the new sequence
+                elapsed_time_next_point = time_difference(init_ts, points[i + point_to_pred_pos][4])
 
-            sequence_distances = compute_sequence_distances(lat_lon_sequence)
+            elapsed_time_seq = time_difference(init_ts, timestamp)
+            elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point
+            temp_list.append([(lat + 90)/180, (lon + 180)/360, elv/8000, elapsed_time_seq_scaled])
 
-            max_distance = max(sequence_distances) if sequence_distances else 1 
-            normalized_sequence_distances = sequence_distances / max_distance
+            if len(temp_list) == seq_length:
+                # Check if the prediction point is within the same file
+                if i + point_to_pred_pos >= len(points):
+                    temp_list = []
+                    init_ts = timestamp
+                    continue
 
-            augmented_temp_list = [point + [norm_d] for point, norm_d in zip(temp_list, normalized_sequence_distances)]
+                lat2, lon2 = points[i + point_to_pred_pos][0], points[i + point_to_pred_pos][1]
 
-            if haversine(lat, lon, lat2, lon2) != 0:        
-                X_train.append(augmented_temp_list)             
-                Y_train.append(haversine(lat, lon, lat2, lon2))
-            temp_list = []
-            init_ts = train_data[i+1][4]
+                # Generate sequence and calculate distances
+                sequence = points[i - seq_length + 1 : i + 1]
+                lat_lon_sequence = [(p[0], p[1]) for p in sequence]
+                sequence_distances = compute_sequence_distances(lat_lon_sequence)
+                max_distance = max(sequence_distances) if sequence_distances else 1
+                normalized_distances = sequence_distances / max_distance
+
+                augmented_temp_list = [point + [norm_d] for point, norm_d in zip(temp_list, normalized_distances)]
+
+                if haversine(lat, lon, lat2, lon2) != 0:
+                    X_train.append(augmented_temp_list)
+                    Y_train.append(haversine(lat, lon, lat2, lon2))
+
+                # Reset for next sequence
+                temp_list = []
+                init_ts = points[i + 1][4] if i + 1 < len(points) else timestamp
 
 
         
@@ -207,7 +224,7 @@ def main():
     Y_train = Y_train / scale_factor
 
 
-    history = tracker.train(X_train, Y_train, epochs=100)#, validation_data=(X_val, y_val))
+    history = tracker.train(X_train, Y_train, epochs=50)#, validation_data=(X_val, y_val))
 
     # print(f"Test loss: {loss}, Test accuracy: {accuracy}")
 
