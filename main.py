@@ -101,7 +101,7 @@ def main():
     Y_train = []
 
     seq_length = 50
-    pred_sec_ahead = 3600  # 2 hours ahead
+    pred_sec_ahead = 142  # 2 hours ahead
 
     # Group training data by source_file
     from collections import defaultdict
@@ -133,11 +133,6 @@ def main():
             temp_list.append([(lat + 90)/180, (lon + 180)/360, elv/8000, elapsed_time_seq_scaled])
 
             if len(temp_list) == seq_length:
-                # Check if the prediction point is within the same file
-                if i + point_to_pred_pos >= len(points):
-                    temp_list = []
-                    init_ts = timestamp
-                    continue
 
                 lat2, lon2 = points[i + point_to_pred_pos][0], points[i + point_to_pred_pos][1]
 
@@ -220,6 +215,7 @@ def main():
     tracker.summary()
     X_train = np.array(X_train)
     Y_train = np.array(Y_train)
+    X_train, Y_train = shuffle_data(X_train, Y_train)
     scale_factor = np.max(Y_train)
     Y_train = Y_train / scale_factor
 
