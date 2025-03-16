@@ -45,10 +45,18 @@ class GPXParser:
         )
 
         removed_items_count =  self.data.size - temp_df.size 
+
+        temp_df['time_dt'] = pd.to_datetime(temp_df['time'])
+
+        # Calculate elapsed_time PER SOURCE FILE
+        # Group by source_file and compute time relative to each file's start
+        temp_df['start_time_per_file'] = temp_df.groupby('source_file')['time_dt'].transform('min')
+        temp_df['elapsed_time'] = (temp_df['time_dt'] - temp_df['start_time_per_file']).dt.total_seconds()
         
         # Restore original NaN values
         temp_df['elevation'] = temp_df['elevation'].replace(-9999, None)
         temp_df['time'] = temp_df['time'].replace('NaT', None)
+        temp_df = temp_df.drop(columns=['start_time_per_file'])  # Cleanup
         
         self.data = temp_df
         return self.data
