@@ -100,7 +100,7 @@ def compute_sequence_time_diffs(seq):
 
 MAX_DISTANCE_DIFF = 14 # in meters
 MAX_TIME_DIFF_SEQ = 10  # in seconds
-MAX_DIST = 200 # gpt estimated 200m in 142 s
+MAX_DIST = 220 # gpt estimated 200m in 142 s
 
 # ------------------------- Main Execution -------------------------
 def main():
@@ -118,7 +118,7 @@ def main():
     X_train = []
     Y_train = []
 
-    seq_length = 25
+    seq_length = 50
     pred_sec_ahead = 142  # 2 hours ahead
 
     # Group training data by source_file
@@ -169,6 +169,15 @@ def main():
                     print("Skipped", seq_skips, "sequences")
                     continue  # Skip this sequence
 
+                dist_to_y_label = haversine(lat, lon, lat2, lon2)
+
+                if dist_to_y_label > 220:
+                    temp_list = []
+                    init_ts = points[i + 1][4] if i + 1 < len(points) else timestamp
+                    seq_skips += 1
+                    print("Skipped", seq_skips, "sequences")
+                    continue
+
                 normalized_distances = [x / MAX_DISTANCE_DIFF for x in sequence_distances]
                 normalized_time_diffs = [x / MAX_TIME_DIFF_SEQ for x in sequence_time_diffs]
 
@@ -180,7 +189,7 @@ def main():
 
                 if haversine(lat, lon, lat2, lon2) != 0:
                     X_train.append(augmented_temp_list)
-                    Y_train.append(haversine(lat, lon, lat2, lon2))
+                    Y_train.append(dist_to_y_label)
 
                 # Reset for next sequence
                 temp_list = []
@@ -205,7 +214,7 @@ def main():
 
     # ------------------------- Model Training -------------------------
     
-    tracker = RNNTracker(input_shape=(25, 3))  # (sequence_length=50, features=5)
+    tracker = RNNTracker(input_shape=(50, 3))  # (sequence_length=50, features=5)
     tracker.compile(loss='mse', metrics=['accuracy'])
     tracker.summary()
     X_train = np.array(X_train)
