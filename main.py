@@ -101,6 +101,7 @@ def compute_sequence_time_diffs(seq):
 MAX_DISTANCE_DIFF = 14 # in meters
 MAX_TIME_DIFF_SEQ = 10  # in seconds
 MAX_DIST = 220 # gpt estimated 200m in 142 s
+MAX_ELEV_DIFF = 14      # Guessed max elevation change for 14m distance (steep mountain trail) 45 degreess slope
 
 # ------------------------- Main Execution -------------------------
 def main():
@@ -132,7 +133,6 @@ def main():
         temp_list = []
         if not points:
             continue
-        init_ts = points[0][4]  # Initial timestamp for this file
         point_times = [p[3] for p in points]
         point_to_pred_pos = find_point_index_to_predict(point_times, pred_sec_ahead)
         if point_to_pred_pos is None:
@@ -142,13 +142,18 @@ def main():
             if i + seq_length + point_to_pred_pos >= len(points):
                 break  # Not enough points ahead in this file
 
-            if len(temp_list) == 0:
-                # Calculate elapsed_time_next_point for the new sequence
-                elapsed_time_next_point = time_difference(init_ts, points[i + seq_length + point_to_pred_pos][4])
+                # Calculate elevation difference
+            if i == 0:
+                diff_elev = 0.0  # First point has no previous elevation
+            else:
+                diff_elev = elv - points[i-1][2]  # Current - previous elevation
 
-            # elapsed_time_seq = time_difference(init_ts, timestamp)
-            # elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point
-            temp_list.append([elv/8000])
+            # Scale to [-1, 1] using maximum guessed elevation difference
+
+            scaled_diff = diff_elev / MAX_ELEV_DIFF
+
+
+            temp_list.append([scaled_diff])
 
             if len(temp_list) == seq_length:
 
@@ -164,25 +169,20 @@ def main():
 
                 if any(distance > MAX_DISTANCE_DIFF for distance in sequence_distances) or any(time_diff > MAX_TIME_DIFF_SEQ for time_diff in sequence_time_diffs):
                     temp_list = []
-                    init_ts = points[i + 1][4] if i + 1 < len(points) else timestamp
                     seq_skips += 1
                     print("Skipped", seq_skips, "sequences")
                     continue  # Skip this sequence
 
                 dist_to_y_label = haversine(lat, lon, lat2, lon2)
 
-                if dist_to_y_label > 220:
+                if dist_to_y_label > MAX_DIST:
                     temp_list = []
-                    init_ts = points[i + 1][4] if i + 1 < len(points) else timestamp
                     seq_skips += 1
                     print("Skipped", seq_skips, "sequences")
                     continue
 
                 normalized_distances = [x / MAX_DISTANCE_DIFF for x in sequence_distances]
                 normalized_time_diffs = [x / MAX_TIME_DIFF_SEQ for x in sequence_time_diffs]
-
-                # max_distance = max(sequence_distances) if sequence_distances else 1
-                # normalized_distances = sequence_distances / max_distance
 
                 augmented_temp_list = [point + [norm_d] for point, norm_d in zip(temp_list, normalized_distances)]
                 augmented_temp_list = [point + [time_diffs] for point, time_diffs in zip(augmented_temp_list, normalized_time_diffs)]
@@ -193,7 +193,6 @@ def main():
 
                 # Reset for next sequence
                 temp_list = []
-                init_ts = points[i + 1][4] if i + 1 < len(points) else timestamp
 
 
     # ------------------------- Model Loading -------------------------
