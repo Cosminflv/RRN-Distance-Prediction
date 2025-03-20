@@ -90,8 +90,22 @@ def compute_sequence_distances(seq):
         distances.append(haversine(lat1, lon1, lat2, lon2))
     return distances
 
+def compute_sequence_time_diffs(seq):
+    time_diffs = [0]
+    for i in range(1, len(seq)):
+        time_diffs.append(seq[i] - seq[i - 1])
+    
+    return time_diffs
+
+
+MAX_DISTANCE_DIFF = 14 # in meters
+MAX_TIME_DIFF_SEQ = 10  # in seconds
+MAX_DIST = 200 # gpt estimated 200m in 142 s
+
 # ------------------------- Main Execution -------------------------
 def main():
+    seq_skips = 0
+
     # Load and parse GPX files for train, test, and validation sets
     train_files = load_gpx_files('gpx_data/train')
     test_files = load_gpx_files('gpx_data/test')
@@ -104,7 +118,7 @@ def main():
     X_train = []
     Y_train = []
 
-    seq_length = 50
+    seq_length = 25
     pred_sec_ahead = 142  # 2 hours ahead
 
     # Group training data by source_file
@@ -132,9 +146,9 @@ def main():
                 # Calculate elapsed_time_next_point for the new sequence
                 elapsed_time_next_point = time_difference(init_ts, points[i + seq_length + point_to_pred_pos][4])
 
-            elapsed_time_seq = time_difference(init_ts, timestamp)
-            elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point
-            temp_list.append([elv/8000, elapsed_time_seq_scaled])
+            # elapsed_time_seq = time_difference(init_ts, timestamp)
+            # elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point
+            temp_list.append([elv/8000])
 
             if len(temp_list) == seq_length:
 
@@ -143,11 +157,26 @@ def main():
                 # Generate sequence and calculate distances
                 sequence = points[i - seq_length + 1 : i + 1]
                 lat_lon_sequence = [(p[0], p[1]) for p in sequence]
+                elapsed_time_sequence = [(p[3]) for p in sequence]
+
                 sequence_distances = compute_sequence_distances(lat_lon_sequence)
-                max_distance = max(sequence_distances) if sequence_distances else 1
-                normalized_distances = sequence_distances / max_distance
+                sequence_time_diffs = compute_sequence_time_diffs(elapsed_time_sequence)
+
+                if any(distance > MAX_DISTANCE_DIFF for distance in sequence_distances) or any(time_diff > MAX_TIME_DIFF_SEQ for time_diff in sequence_time_diffs):
+                    temp_list = []
+                    init_ts = points[i + 1][4] if i + 1 < len(points) else timestamp
+                    seq_skips += 1
+                    print("Skipped", seq_skips, "sequences")
+                    continue  # Skip this sequence
+
+                normalized_distances = [x / MAX_DISTANCE_DIFF for x in sequence_distances]
+                normalized_time_diffs = [x / MAX_TIME_DIFF_SEQ for x in sequence_time_diffs]
+
+                # max_distance = max(sequence_distances) if sequence_distances else 1
+                # normalized_distances = sequence_distances / max_distance
 
                 augmented_temp_list = [point + [norm_d] for point, norm_d in zip(temp_list, normalized_distances)]
+                augmented_temp_list = [point + [time_diffs] for point, time_diffs in zip(augmented_temp_list, normalized_time_diffs)]
 
                 if haversine(lat, lon, lat2, lon2) != 0:
                     X_train.append(augmented_temp_list)
@@ -176,14 +205,14 @@ def main():
 
     # ------------------------- Model Training -------------------------
     
-    tracker = RNNTracker(input_shape=(50, 3))  # (sequence_length=50, features=5)
+    tracker = RNNTracker(input_shape=(25, 3))  # (sequence_length=50, features=5)
     tracker.compile(loss='mse', metrics=['accuracy'])
     tracker.summary()
     X_train = np.array(X_train)
     Y_train = np.array(Y_train)
     X_train, Y_train = shuffle_data(X_train, Y_train)
-    scale_factor = np.max(Y_train)
-    Y_train = Y_train / scale_factor
+    # scale_factor = np.max(Y_train)
+    Y_train = Y_train / MAX_DIST
 
 
     history = tracker.train(X_train, Y_train, epochs=100)#, validation_data=(X_val, y_val))
@@ -194,7 +223,7 @@ def main():
     tracker.history = history
     # tracker.plot_training_curves(metric='loss')
     # tracker.plot_training_curves(metric='accuracy')
-    tracker.plot_actual_vs_predicted_unscaled(X_train, Y_train, scale_factor)
+    tracker.plot_actual_vs_predicted_unscaled(X_train, Y_train, MAX_DIST)
 
     # tracker.model.save("model.keras")
     x = 3
