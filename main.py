@@ -134,7 +134,7 @@ def main():
 
             elapsed_time_seq = time_difference(init_ts, timestamp)
             elapsed_time_seq_scaled = elapsed_time_seq / elapsed_time_next_point
-            temp_list.append([(lat + 90)/180, (lon + 180)/360, elv/8000, elapsed_time_seq_scaled])
+            temp_list.append([elv/8000, elapsed_time_seq_scaled])
 
             if len(temp_list) == seq_length:
 
@@ -176,7 +176,7 @@ def main():
 
     # ------------------------- Model Training -------------------------
     
-    tracker = RNNTracker(input_shape=(50, 5))  # (sequence_length=50, features=5)
+    tracker = RNNTracker(input_shape=(50, 3))  # (sequence_length=50, features=5)
     tracker.compile(loss='mse', metrics=['accuracy'])
     tracker.summary()
     X_train = np.array(X_train)
