@@ -1,4 +1,3 @@
-from collections import defaultdict
 import os
 import numpy as np
 import pandas as pd
@@ -229,8 +228,8 @@ def main():
 
     # # ------------------------- Model Evaluation & Visualization -------------------------
     tracker.history = history
-    # tracker.plot_training_curves(metric='loss')
-    # tracker.plot_training_curves(metric='accuracy')
+    tracker.plot_training_curves(metric='loss')
+    tracker.plot_training_curves(metric='accuracy')
     tracker.plot_actual_vs_predicted_unscaled(X_train, Y_train, MAX_DIST)
 
     # tracker.model.save("model.keras")

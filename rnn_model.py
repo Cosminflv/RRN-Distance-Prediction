@@ -4,7 +4,6 @@ from sklearn.metrics import r2_score
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
-from statsmodels.graphics.tsaplots import plot_acf  # Requires statsmodels
 
 class RNNTracker:
     def __init__(self, input_shape, lstm_units=128, activation='relu'):
@@ -89,41 +88,6 @@ class RNNTracker:
         plt.legend()
         plt.show()
 
-    def plot_actual_vs_predicted_coords(self, X, y_true, figsize=(10, 6), sample_points=200):
-        """Scatter plot of true vs predicted coordinates (in original WGS84 scale)"""
-
-        # Predict normalized values
-        y_pred = self.predict(X)
-
-        # Plot results
-        plt.figure(figsize=figsize) 
-        plt.scatter(y_true[:sample_points, 0], y_true[:sample_points, 1], 
-                    label='True Positions', alpha=0.5, marker='o', color='blue')
-        plt.scatter(y_pred[:sample_points, 0], y_pred[:sample_points, 1], 
-                    label='Predicted Positions', alpha=0.5, marker='x', color='red')
-
-        plt.xlabel('Latitude')
-        plt.ylabel('Longitude')
-        plt.title('Actual vs Predicted Positions (Denormalized)')
-        plt.legend()
-        plt.show()
-
-    def plot_time_scatter(self, X, y_true, figsize=(10, 6)):
-        """Scatter plot of actual vs predicted time values"""
-        y_pred = self.predict(X)
-
-        actual_time = y_true[:, 2]
-        predicted_time = y_pred[:, 2]
-
-        plt.figure(figsize=figsize)
-        plt.scatter(actual_time, predicted_time, alpha=0.5)
-        plt.plot([min(actual_time), max(actual_time)], 
-                 [min(actual_time), max(actual_time)], 'k--')
-        plt.xlabel('Actual Normalized Time')
-        plt.ylabel('Predicted Normalized Time')
-        plt.title('Time Prediction Correlation')
-        plt.grid(True)
-        plt.show()
 
     def plot_actual_vs_predicted_unscaled(self, X, y_true, scale_factor, figsize=(10, 6)):
         """
@@ -167,78 +131,6 @@ class RNNTracker:
         plt.grid(True)
         plt.legend()
         plt.show()
-
-
-    def plot_error_distributions(self, X, y_true, figsize=(12, 5)):
-        """Histogram of latitude/longitude errors"""
-        y_pred = self.predict(X)
-        errors = y_true - y_pred
-        
-        plt.figure(figsize=figsize)
-        plt.subplot(1, 2, 1)
-        plt.hist(errors[:, 0], bins=50, color='blue', alpha=0.7)
-        plt.title('Latitude Error Distribution')
-        plt.xlabel('Error')
-
-        plt.subplot(1, 2, 2)
-        plt.hist(errors[:, 1], bins=50, color='red', alpha=0.7)
-        plt.title('Longitude Error Distribution')
-        plt.xlabel('Error')
-        
-        plt.tight_layout()
-        plt.show()
-
-    def plot_trajectory_comparison(self, X_sequence, y_true_trajectory, figsize=(10, 6)):
-        """Compare true vs predicted trajectory for a sample sequence"""
-        y_pred = self.predict(X_sequence[np.newaxis, ...])[0]
-        
-        plt.figure(figsize=figsize)
-        plt.plot(y_true_trajectory[:, 0], y_true_trajectory[:, 1], 
-                'g-', label='True Trajectory', linewidth=2)
-        plt.plot(y_pred[0], y_pred[1], 'ro--', 
-                label='Predicted Position', markersize=8)
-        plt.xlabel('Latitude')
-        plt.ylabel('Longitude')
-        plt.title('Trajectory Comparison')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
-
-    def plot_residual_autocorrelation(self, X, y_true, figsize=(12, 5)):
-        """ACF plots for temporal correlation in errors"""
-        y_pred = self.predict(X)
-        errors = y_true - y_pred
-        
-        plt.figure(figsize=figsize)
-        plt.subplot(1, 2, 1)
-        plot_acf(errors[:, 0], title='Latitude Errors ACF')
-        
-        plt.subplot(1, 2, 2)
-        plot_acf(errors[:, 1], title='Longitude Errors ACF')
-        
-        plt.tight_layout()
-        plt.show()
-
-    def plot_geospatial_errors(self, X, y_true, figsize=(10, 6)):
-        """2D kernel density estimate of errors (requires seaborn)"""
-        import seaborn as sns
-        y_pred = self.predict(X)
-        errors = y_true - y_pred
-        
-        plt.figure(figsize=figsize)
-        sns.kdeplot(x=errors[:, 1], y=errors[:, 0], 
-                   cmap='viridis', fill=True, levels=20)
-        plt.xlabel('Longitude Error')
-        plt.ylabel('Latitude Error')
-        plt.title('Geospatial Error Distribution')
-        plt.colorbar(label='Density')
-        plt.show()
-
-    def visualize_model_architecture(self, show_shapes=True, show_layer_names=True):
-        """Generate model architecture diagram (requires pydot)"""
-        tf.keras.utils.plot_model(self.model, show_shapes=show_shapes,
-                                 show_layer_names=show_layer_names, 
-                                 rankdir='LR', dpi=65, to_file='model.png')
 
 # Usage example:
 if __name__ == "__main__":
