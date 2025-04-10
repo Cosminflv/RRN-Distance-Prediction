@@ -1,7 +1,10 @@
 import os
 import numpy as np
+
 from gpx_data_parser import GPXParser
 from rnn_model import RNNTracker
+from utils import haversine
+
 
 # ------------------------- Data Loading & Parsing -------------------------
 def load_gpx_files(directory):
@@ -21,14 +24,6 @@ def shuffle_data(X, y, seed=42):
     data = list(zip(X, y))
     np.random.shuffle(data)
     return map(np.array, zip(*data))
-
-def haversine(lon1, lat1, lon2, lat2):
-    """Calculate distance in meters between two geographic points"""
-    lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
-    return 2 * 6371 * 1000 * np.arcsin(np.sqrt(a))  # Meters
 
 def find_point_index_to_predict(elapsed_time, pred_sec_ahead):
     for i in range(len(elapsed_time)):
@@ -114,7 +109,6 @@ def main():
             temp_list.append([scaled_diff])
 
             if len(temp_list) == seq_length:
-
                 lat2, lon2 = points[i + point_to_pred_pos][0], points[i + point_to_pred_pos][1]
 
                 # Generate sequence and calculate distances
@@ -125,32 +119,59 @@ def main():
                 sequence_distances = compute_sequence_distances(lat_lon_sequence)
                 sequence_time_diffs = compute_sequence_time_diffs(elapsed_time_sequence)
 
-                if any(distance > MAX_DISTANCE_DIFF for distance in sequence_distances) or any(time_diff > MAX_TIME_DIFF_SEQ for time_diff in sequence_time_diffs):
+                # --- Validation Check 1 ---
+                if any(distance > MAX_DISTANCE_DIFF for distance in sequence_distances) or any(
+                        time_diff > MAX_TIME_DIFF_SEQ for time_diff in sequence_time_diffs):
                     temp_list = []
                     seq_skips += 1
                     print("Skipped", seq_skips, "sequences")
                     continue  # Skip this sequence
 
+                # --- Validation Check 2 ---
                 dist_to_y_label = haversine(lat, lon, lat2, lon2)
-
                 if dist_to_y_label > MAX_DIST:
                     temp_list = []
                     seq_skips += 1
                     print("Skipped", seq_skips, "sequences")
                     continue
 
+                # --- ONLY WRITE TO FILE IF VALIDATION PASSED ---
+                # Convert raw points to TrackPoint objects
+                # trackpoint_sequence = []
+                # for p in sequence:
+                #     tp = TrackPoint(
+                #         latitude=p[0],
+                #         longitude=p[1],
+                #         elevation=None if p[2] == -9999 else p[2],  # Handle placeholder
+                #         time=pd.to_datetime(p[4]))  # Convert string timestamp
+                #     trackpoint_sequence.append(tp)
+                #
+                #     # Create filename with source file and sequence index
+                #     source_file_stem = os.path.splitext(os.path.basename(p[5]))[0]  # p[5] is source_file
+                #     filename = f"valid_sequences/{source_file_stem}_seq{i}.json"
+                #
+                #     # Ensure directory exists
+                #     os.makedirs("valid_sequences", exist_ok=True)
+                #
+                #     # Write to file
+                #     write_trackpoints_to_file(trackpoint_sequence, filename)
+
+                # --- Continue with processing ---
                 normalized_distances = [x / MAX_DISTANCE_DIFF for x in sequence_distances]
                 normalized_time_diffs = [x / MAX_TIME_DIFF_SEQ for x in sequence_time_diffs]
 
                 augmented_temp_list = [point + [norm_d] for point, norm_d in zip(temp_list, normalized_distances)]
-                augmented_temp_list = [point + [time_diffs] for point, time_diffs in zip(augmented_temp_list, normalized_time_diffs)]
+                augmented_temp_list = [point + [time_diffs] for point, time_diffs in
+                                       zip(augmented_temp_list, normalized_time_diffs)]
 
                 if haversine(lat, lon, lat2, lon2) != 0:
                     X_train.append(augmented_temp_list)
-                    Y_train.append(dist_to_y_label)
+                Y_train.append(dist_to_y_label)
 
                 # Reset for next sequence
                 temp_list = []
+
+
 
 
     # ------------------------- Model Loading -------------------------
@@ -176,7 +197,7 @@ def main():
     tracker.summary()
     X_train = np.array(X_train)
     Y_train = np.array(Y_train)
-    X_train, Y_train = shuffle_data(X_train, Y_train)
+    # X_train, Y_train = shuffle_data(X_train, Y_train)
     Y_train = Y_train / MAX_DIST
 
 
@@ -192,6 +213,7 @@ def main():
 
     # tracker.model.save("model.keras")
     x = 3
+
 
 if __name__ == "__main__":
     main()
