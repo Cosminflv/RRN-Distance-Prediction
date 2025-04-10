@@ -1,7 +1,5 @@
 import os
 import numpy as np
-import pandas as pd
-from data_processor import GPXDataProcessor
 from gpx_data_parser import GPXParser
 from rnn_model import RNNTracker
 
@@ -16,32 +14,6 @@ def parse_gpx_data(gpx_files):
     return parser.get_dataframe()
 
 # ------------------------- Data Processing -------------------------
-def pre_process_for_fitting(df):
-    """
-    Performs preprocessing steps that do not involve normalization,
-    so that scalers can be fitted on the training data.
-    """
-    df = df.copy()
-    df["time"] = pd.to_datetime(df["time"])
-    # Compute time_seconds
-    df["time_seconds"] = df.groupby("source_file")["time"].transform(
-        lambda x: (x - x.min()).dt.total_seconds()
-    )
-    # Handle missing elevation values
-    df['elevation'] = df.groupby('source_file')['elevation'].transform(
-        lambda x: x.fillna(method='ffill').fillna(method='bfill')
-    )
-    df['elevation'] = df['elevation'].fillna(0)
-    return df
-
-def process_data(df, coords_scaler, elevation_scaler, time_scaler, pred_distance_scaler, cum_distance_scaler):
-    """Processes raw GPX data using pre-fitted scalers and returns the normalized DataFrame."""
-    processor = GPXDataProcessor(df, coords_scaler, elevation_scaler, time_scaler, pred_distance_scaler, cum_distance_scaler)
-    return processor, processor.process_data()
-
-def create_sequences(processor, df, sequence_length=15, is_train=False):
-    """Creates sequences for model training/testing."""
-    return processor.create_sequences(df, sequence_length, is_train)
 
 def shuffle_data(X, y, seed=42):
     """Shuffles the sequences while keeping X and y aligned."""
@@ -57,19 +29,6 @@ def haversine(lon1, lat1, lon2, lat2):
     dlat = lat2 - lat1
     a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
     return 2 * 6371 * 1000 * np.arcsin(np.sqrt(a))  # Meters
-
-from datetime import datetime
-
-def time_difference(timestamp1, timestamp2):
-    fmt = "%Y-%m-%dT%H:%M:%SZ"
-    dt1 = datetime.strptime(timestamp1, fmt)
-    dt2 = datetime.strptime(timestamp2, fmt)
-    return abs((dt2 - dt1).total_seconds())
-
-def convert_to_float(obj):
-    if isinstance(obj, list):
-        return [convert_to_float(item) for item in obj]
-    return float(obj)  # Convert individual elements
 
 def find_point_index_to_predict(elapsed_time, pred_sec_ahead):
     for i in range(len(elapsed_time)):
@@ -212,13 +171,12 @@ def main():
 
     # ------------------------- Model Training -------------------------
     
-    tracker = RNNTracker(input_shape=(50, 3))  # (sequence_length=50, features=5)
+    tracker = RNNTracker(input_shape=(50, 3))  # (sequence_length=50, features=3)
     tracker.compile(loss='mse', metrics=['accuracy'])
     tracker.summary()
     X_train = np.array(X_train)
     Y_train = np.array(Y_train)
     X_train, Y_train = shuffle_data(X_train, Y_train)
-    # scale_factor = np.max(Y_train)
     Y_train = Y_train / MAX_DIST
 
 
