@@ -80,11 +80,11 @@ def predict_distance(trackpoints, tracker):
     scaled_prediction = tracker.predict(input_sequence)[0][0]
     unscaled_prediction = scaled_prediction * MAX_DIST
 
-    return [unscaled_prediction]
+    return [float(unscaled_prediction)]
 
-tracker = RNNTracker.load("model.keras")
-tracker.model.load_weights("model.keras")
-tracker.summary()
-trackpoints = read_trackpoints_from_file("valid_sequences/Activity August 02, 2020_seq99.json")
-prediction = predict_distance(trackpoints, tracker)
-print(f"Predicted distance: {prediction[0]} meters")
+# tracker = RNNTracker.load("model.keras")
+# tracker.model.load_weights("model.keras")
+# tracker.summary()
+# trackpoints = read_trackpoints_from_file("valid_sequences/Activity August 02, 2020_seq99.json")
+# prediction = predict_distance(trackpoints, tracker)
+# print(f"Predicted distance: {prediction[0]} meters")
