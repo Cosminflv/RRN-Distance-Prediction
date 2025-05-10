@@ -60,6 +60,8 @@ MAX_ELEV_DIFF = 2800 # Max elevation change (2800) for 4000m distance (steep mou
 # ------------------------- Main Execution -------------------------
 def main():
     seq_skips = 0
+    pred_horizons = [3600 * i for i in range(1, 8)]  # 1-7 hours ahead
+    num_horizons = len(pred_horizons)
 
     # Load and parse GPX files for train, test, and validation sets
     train_files = load_gpx_files('gpx_data/train')
@@ -87,13 +89,23 @@ def main():
         temp_list = []
         if not points:
             continue
-        point_times = [p[3] for p in points]
-        point_to_pred_pos = find_point_index_to_predict(point_times, pred_sec_ahead)
-        if point_to_pred_pos is None:
-            continue  # Skip if no valid prediction position
+
+        elapsed_times = [p[3] for p in points]
+        pred_indices = []
+
+
+        for horizon in pred_horizons:
+            idx = find_point_index_to_predict(elapsed_times, horizon)
+            if idx == -1:
+                break
+            pred_indices.append(idx)
+
+        # Skip files that don't have enough data for all horizons
+        if(len(pred_indices) != num_horizons):
+            continue
 
         for i, (lat, lon, elv, elapsed_time, timestamp, s_file) in enumerate(points):
-            if i + seq_length + point_to_pred_pos >= len(points):
+            if i + seq_length + max(pred_indices) >= len(points):
                 break  # Not enough points ahead in this file
 
                 # Calculate elevation difference
@@ -110,7 +122,18 @@ def main():
             temp_list.append([scaled_diff])
 
             if len(temp_list) == seq_length:
-                lat2, lon2 = points[i + point_to_pred_pos][0], points[i + point_to_pred_pos][1]
+                # Get all prediction points
+                prediction_points = [points[i + idx] for idx in pred_indices]
+
+                # Calculate distances for all horizons
+                distances = [haversine(lat, lon, p[0], p[1]) for p in prediction_points]
+
+                # --- Validation Check 2 (for all horizons) ---
+                if any(dist > MAX_DIST * (h+1) for h, dist in enumerate(distances)):
+                    temp_list = []
+                    seq_skips += 1
+                    print(f"Skipped {seq_skips} sequences")
+                    continue
 
                 # Generate sequence and calculate distances
                 sequence = points[i - seq_length + 1 : i + 1]
@@ -127,14 +150,6 @@ def main():
                     seq_skips += 1
                     print("Skipped", seq_skips, "sequences")
                     continue  # Skip this sequence
-
-                # --- Validation Check 2 ---
-                dist_to_y_label = haversine(lat, lon, lat2, lon2)
-                if dist_to_y_label > MAX_DIST:
-                    temp_list = []
-                    seq_skips += 1
-                    print("Skipped", seq_skips, "sequences")
-                    continue
 
                 # --- ONLY WRITE TO FILE IF VALIDATION PASSED ---
                 # Convert raw points to TrackPoint objects
@@ -165,31 +180,13 @@ def main():
                 augmented_temp_list = [point + [time_diffs] for point, time_diffs in
                                        zip(augmented_temp_list, normalized_time_diffs)]
 
-                if haversine(lat, lon, lat2, lon2) != 0:
+                if all(dist != 0 for dist in distances):
                     X_train.append(augmented_temp_list)
-                Y_train.append(dist_to_y_label)
+                    Y_train.append(distances)
 
                 # Reset for next sequence
                 temp_list = []
 
-
-
-
-    # ------------------------- Model Loading -------------------------
-
-    # tracker = RNNTracker.load("model.keras")
-    # tracker.summary()
-    # X_train = convert_to_float(X_train)
-    # X_train = np.array(X_train, dtype=np.float64) 
-    # print("Model expects input shape:", tracker.model.input_shape)
-    # print("X_train shape:", X_train.shape)
-    # scale_factor = np.max(Y_train)
-    # Y_train = convert_to_float(Y_train)
-    # Y_train = np.array(Y_train, dtype=np.float64)
-    # Y_train = Y_train / scale_factor
-
-    # tracker.plot_actual_vs_predicted_unscaled(X_train, Y_train, scale_factor)
-    
 
     # ------------------------- Model Training -------------------------
     
@@ -210,7 +207,7 @@ def main():
     tracker.history = history
     tracker.plot_training_curves(metric='loss')
     tracker.plot_training_curves(metric='accuracy')
-    tracker.plot_actual_vs_predicted_unscaled(X_train, Y_train, MAX_DIST)
+    tracker.plot_horizon_performance(X_train, Y_train, MAX_DIST)
 
     # tracker.model.save("model.keras")
     x = 3

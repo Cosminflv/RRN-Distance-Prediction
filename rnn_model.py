@@ -25,7 +25,7 @@ class RNNTracker:
         """Construct the LSTM architecture"""
         inputs = Input(shape=self.input_shape)  # Define input layer
         x = LSTM(self.lstm_units, activation=self.activation, return_sequences=False)(inputs)
-        outputs = Dense(1)(x)  # Predicts (meters ahead) distance
+        outputs = Dense(7)(x)  # 7 outputs for 1h-7h predictions
 
         model = Model(inputs=inputs, outputs=outputs)  # Functional API model
         return model
@@ -130,6 +130,18 @@ class RNNTracker:
         plt.title(f'Actual vs Predicted Distance\nR² Score: {r2:.3f} | Mean Diff: {mean_diff:.3f} m')
         plt.grid(True)
         plt.legend()
+        plt.show()
+
+    def plot_horizon_performance(self, X, y_true, scale_factor):
+        y_pred = self.predict(X) * scale_factor
+        y_true = y_true * scale_factor
+
+        fig, axs = plt.subplots(3, 3, figsize=(15, 12))
+        for i, ax in enumerate(axs.flatten()[:7]):
+            ax.scatter(y_true[:, i], y_pred[:, i], alpha=0.3)
+            ax.plot([0, scale_factor], [0, scale_factor], 'k--')
+            ax.set_title(f'{i + 1}h Ahead (MAE: {np.mean(np.abs(y_pred[:, i] - y_true[:, i])):.1f}m)')
+        plt.tight_layout()
         plt.show()
 
 # Usage example:
