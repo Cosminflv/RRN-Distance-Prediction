@@ -54,8 +54,8 @@ def compute_sequence_time_diffs(seq):
 # 10
 MAX_DISTANCE_DIFF = 14 # in meters
 MAX_TIME_DIFF_SEQ = 10  # in seconds
-MAX_DIST = 2000 # gpt estimated 4000m in one hour
-MAX_ELEV_DIFF = 800      # Guessed max elevation change (600) for 4000m distance (steep mountain trail) 45 degreess slope
+MAX_DIST = 4000 # gpt estimated 4000m in one hour
+MAX_ELEV_DIFF = 2800 # Max elevation change (2800) for 4000m distance (steep mountain trail) 45 degreess slope
 
 # ------------------------- Main Execution -------------------------
 def main():
