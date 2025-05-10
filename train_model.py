@@ -54,8 +54,8 @@ def compute_sequence_time_diffs(seq):
 # 10
 MAX_DISTANCE_DIFF = 14 # in meters
 MAX_TIME_DIFF_SEQ = 10  # in seconds
-MAX_DIST = 2000 # gpt estimated 4000m in one hour
-MAX_ELEV_DIFF = 800      # Guessed max elevation change (600) for 4000m distance (steep mountain trail) 45 degreess slope
+MAX_DIST = 33600 # gpt estimated 4000m in one hour
+MAX_ELEV_DIFF = 23758      # Guessed max elevation change (600) for 4000m distance (steep mountain trail) 45 degreess slope
 
 # ------------------------- Main Execution -------------------------
 def main():
@@ -74,7 +74,12 @@ def main():
     Y_train = []
 
     seq_length = 50
-    pred_sec_ahead = 3600  # 1 hour ahead
+    pred_sec_ahead = 25200  # Example: 2 hours ahead
+
+    # Validate pred_sec_ahead is a multiple of 3600
+    if pred_sec_ahead % 3600 != 0:
+        raise ValueError("pred_sec_ahead must be a multiple of 3600 seconds (1 hour)")
+    n_intervals = pred_sec_ahead // 3600
 
     # Group training data by source_file
     from collections import defaultdict
@@ -87,89 +92,88 @@ def main():
         temp_list = []
         if not points:
             continue
-        point_times = [p[3] for p in points]
-        point_to_pred_pos = find_point_index_to_predict(point_times, pred_sec_ahead)
-        if point_to_pred_pos is None:
-            continue  # Skip if no valid prediction position
-
         for i, (lat, lon, elv, elapsed_time, timestamp, s_file) in enumerate(points):
-            if i + seq_length + point_to_pred_pos >= len(points):
-                break  # Not enough points ahead in this file
+            # Check if there are enough points to form a sequence
+            if i + seq_length >= len(points):
+                break  # Not enough points to form a sequence
 
-                # Calculate elevation difference
+            # Calculate elevation difference
             if i == 0:
-                diff_elev = 0.0  # First point has no previous elevation
+                diff_elev = 0.0
             else:
-                diff_elev = elv - points[i-1][2]  # Current - previous elevation
-
-            # Scale to [-1, 1] using maximum guessed elevation difference
-
-            scaled_diff = diff_elev / MAX_ELEV_DIFF
-
+                diff_elev = elv - points[i-1][2]
+            scaled_diff = diff_elev / MAX_ELEV_DIFF  # Assuming MAX_ELEV_DIFF is defined
 
             temp_list.append([scaled_diff])
 
             if len(temp_list) == seq_length:
-                lat2, lon2 = points[i + point_to_pred_pos][0], points[i + point_to_pred_pos][1]
+                # Calculate cumulative distance over each hourly interval
+                current_index = i  # Last point in the sequence
+                total_distance = 0.0
+                valid = True
 
-                # Generate sequence and calculate distances
+                for _ in range(n_intervals):
+                    target_time = points[current_index][3] + 3600
+                    next_index = current_index + 1
+                    # Find next point >= target_time
+                    while next_index < len(points) and points[next_index][3] < target_time:
+                        next_index += 1
+                    if next_index >= len(points):
+                        valid = False
+                        break
+                    # Accumulate distance
+                    current_lat = points[current_index][0]
+                    current_lon = points[current_index][1]
+                    next_lat = points[next_index][0]
+                    next_lon = points[next_index][1]
+                    total_distance += haversine(current_lat, current_lon, next_lat, next_lon)
+                    current_index = next_index
+
+                if not valid:
+                    temp_list = []
+                    seq_skips += 1
+                    print("Skipped", seq_skips, "sequences")
+                    continue
+
+                dist_to_y_label = total_distance
+
+                # Generate sequence and calculate distances for validation
                 sequence = points[i - seq_length + 1 : i + 1]
                 lat_lon_sequence = [(p[0], p[1]) for p in sequence]
-                elapsed_time_sequence = [(p[3]) for p in sequence]
+                elapsed_time_sequence = [p[3] for p in sequence]
 
                 sequence_distances = compute_sequence_distances(lat_lon_sequence)
                 sequence_time_diffs = compute_sequence_time_diffs(elapsed_time_sequence)
 
-                # --- Validation Check 1 ---
-                if any(distance > MAX_DISTANCE_DIFF for distance in sequence_distances) or any(
-                        time_diff > MAX_TIME_DIFF_SEQ for time_diff in sequence_time_diffs):
+                # Validation Check 1: Sequence consistency
+                if any(distance > MAX_DISTANCE_DIFF for distance in sequence_distances) or any(time_diff > MAX_TIME_DIFF_SEQ for time_diff in sequence_time_diffs):
                     temp_list = []
                     seq_skips += 1
                     print("Skipped", seq_skips, "sequences")
-                    continue  # Skip this sequence
+                    continue
 
-                # --- Validation Check 2 ---
-                dist_to_y_label = haversine(lat, lon, lat2, lon2)
+                # Validation Check 2: Total distance threshold
                 if dist_to_y_label > MAX_DIST:
                     temp_list = []
                     seq_skips += 1
                     print("Skipped", seq_skips, "sequences")
                     continue
 
-                # --- ONLY WRITE TO FILE IF VALIDATION PASSED ---
-                # Convert raw points to TrackPoint objects
-                # trackpoint_sequence = []
-                # for p in sequence:
-                #     tp = TrackPoint(
-                #         latitude=p[0],
-                #         longitude=p[1],
-                #         elevation=None if p[2] == -9999 else p[2],  # Handle placeholder
-                #         time=pd.to_datetime(p[4]))  # Convert string timestamp
-                #     trackpoint_sequence.append(tp)
-                #
-                #     # Create filename with source file and sequence index
-                #     source_file_stem = os.path.splitext(os.path.basename(p[5]))[0]  # p[5] is source_file
-                #     filename = f"valid_sequences/{source_file_stem}_seq{i}.json"
-                #
-                #     # Ensure directory exists
-                #     os.makedirs("valid_sequences", exist_ok=True)
-                #
-                #     # Write to file
-                #     write_trackpoints_to_file(trackpoint_sequence, filename)
+                # Prepare features with normalized distances and time diffs
+                normalized_distances = [d / MAX_DISTANCE_DIFF for d in sequence_distances]
+                normalized_time_diffs = [t / MAX_TIME_DIFF_SEQ for t in sequence_time_diffs]
 
-                # --- Continue with processing ---
-                normalized_distances = [x / MAX_DISTANCE_DIFF for x in sequence_distances]
-                normalized_time_diffs = [x / MAX_TIME_DIFF_SEQ for x in sequence_time_diffs]
+                # Augment features
+                augmented_features = []
+                for idx in range(seq_length):
+                    feature = temp_list[idx] + [normalized_distances[idx], normalized_time_diffs[idx]]
+                    augmented_features.append(feature)
 
-                augmented_temp_list = [point + [norm_d] for point, norm_d in zip(temp_list, normalized_distances)]
-                augmented_temp_list = [point + [time_diffs] for point, time_diffs in
-                                       zip(augmented_temp_list, normalized_time_diffs)]
-
-                if haversine(lat, lon, lat2, lon2) != 0:
-                    X_train.append(augmented_temp_list)
+                # Append to training data
+                X_train.append(augmented_features)
                 Y_train.append(dist_to_y_label)
 
-                # Reset for next sequence
+                # Reset temporary list
                 temp_list = []
 
 
