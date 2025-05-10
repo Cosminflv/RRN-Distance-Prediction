@@ -76,7 +76,6 @@ def main():
     Y_train = []
 
     seq_length = 50
-    pred_sec_ahead = 3600  # 1 hour ahead
 
     # Group training data by source_file
     from collections import defaultdict
@@ -101,7 +100,7 @@ def main():
             pred_indices.append(idx)
 
         # Skip files that don't have enough data for all horizons
-        if(len(pred_indices) != num_horizons):
+        if len(pred_indices) != num_horizons:
             continue
 
         for i, (lat, lon, elv, elapsed_time, timestamp, s_file) in enumerate(points):
@@ -125,8 +124,23 @@ def main():
                 # Get all prediction points
                 prediction_points = [points[i + idx] for idx in pred_indices]
 
-                # Calculate distances for all horizons
-                distances = [haversine(lat, lon, p[0], p[1]) for p in prediction_points]
+                distances = []  # will hold cumulative distances
+                has_first = False  # have we set our “anchor” yet?
+                prev_lat = prev_lon = None  # to store the last point we visited
+
+                for idx, (pt_lat, pt_lon, _, _, _, _) in enumerate(prediction_points):
+                    if not has_first:
+                        # distance from your reference (lat, lon) to the *first* prediction point
+                        first_d = haversine(lat, lon, pt_lat, pt_lon)
+                        distances.append(first_d)
+                        # prime the pump for the next segment
+                        prev_lat, prev_lon = pt_lat, pt_lon
+                        has_first = True
+                    else:
+                        # distance from the *previous* prediction point to the current one
+                        segment = haversine(prev_lat, prev_lon, pt_lat, pt_lon)
+                        distances.append(distances[-1] + segment)
+                        prev_lat, prev_lon = pt_lat, pt_lon
 
                 # --- Validation Check 2 (for all horizons) ---
                 if any(dist > MAX_DIST * (h+1) for h, dist in enumerate(distances)):
