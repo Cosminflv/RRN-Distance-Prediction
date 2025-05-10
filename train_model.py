@@ -50,11 +50,12 @@ def compute_sequence_time_diffs(seq):
     
     return time_diffs
 
-
+# 14
+# 10
 MAX_DISTANCE_DIFF = 14 # in meters
 MAX_TIME_DIFF_SEQ = 10  # in seconds
-MAX_DIST = 220 # gpt estimated 200m in 142 s
-MAX_ELEV_DIFF = 14      # Guessed max elevation change for 14m distance (steep mountain trail) 45 degreess slope
+MAX_DIST = 2000 # gpt estimated 4000m in one hour
+MAX_ELEV_DIFF = 800      # Guessed max elevation change (600) for 4000m distance (steep mountain trail) 45 degreess slope
 
 # ------------------------- Main Execution -------------------------
 def main():
@@ -73,7 +74,7 @@ def main():
     Y_train = []
 
     seq_length = 50
-    pred_sec_ahead = 142  # 2 hours ahead
+    pred_sec_ahead = 3600  # 1 hour ahead
 
     # Group training data by source_file
     from collections import defaultdict
@@ -197,7 +198,7 @@ def main():
     tracker.summary()
     X_train = np.array(X_train)
     Y_train = np.array(Y_train)
-    # X_train, Y_train = shuffle_data(X_train, Y_train)
+    X_train, Y_train = shuffle_data(X_train, Y_train)
     Y_train = Y_train / MAX_DIST
 
 

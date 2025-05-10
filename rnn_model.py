@@ -30,7 +30,7 @@ class RNNTracker:
         model = Model(inputs=inputs, outputs=outputs)  # Functional API model
         return model
     
-    def compile(self, optimizer='adam', loss='mse', metrics=None):
+    def compile(self, optimizer='Adam', loss='mse', metrics=None):
         """Configure the model training parameters"""
         _metrics = metrics or ['accuracy']  # Mean Absolute Error more meaningful than accuracy
         self.model.compile(
