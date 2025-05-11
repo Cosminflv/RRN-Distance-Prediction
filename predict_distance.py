@@ -18,10 +18,10 @@ def predict_distance(trackpoints, tracker):
         list: Single-element list containing the predicted distance in meters.
     """
     # Constants from training configuration
-    MAX_ELEV_DIFF = 14
+    MAX_ELEV_DIFF = 2800
     MAX_DISTANCE_DIFF = 14
     MAX_TIME_DIFF_SEQ = 10
-    MAX_DIST = 220  # As defined during training
+    MAX_DIST = 4000  # As defined during training
 
     # Validate input
     if len(trackpoints) != 50:
@@ -77,10 +77,10 @@ def predict_distance(trackpoints, tracker):
     ]).reshape(1, 50, 3)  # Reshape for model input (batch_size=1)
 
     # Predict and unscale
-    scaled_prediction = tracker.predict(input_sequence)[0][0]
-    unscaled_prediction = scaled_prediction * MAX_DIST
+    scaled_prediction = tracker.predict(input_sequence)[0]
+    unscaled_predictions  = scaled_prediction * MAX_DIST
 
-    return [float(unscaled_prediction)]
+    return [float(pred) for pred in unscaled_predictions]
 
 # tracker = RNNTracker.load("model.keras")
 # tracker.model.load_weights("model.keras")
